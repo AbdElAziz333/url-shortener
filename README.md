@@ -42,7 +42,3 @@ make sure you have Docker installed (check with docker --version)
 
 apps runs in k8s
 databases in k8s
-
-make sure you have kubectl tool installed. check with `kubectl version`
-second, run databases with `make kube_apply_dbs`
-third, run apps with `make kube_apply_apps`
