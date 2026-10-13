@@ -2,11 +2,6 @@ apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: gateway
-  namespace: url-shortener
-  labels:
-    app: gateway
-    app.kubernetes.io/name: gateway
-    app.kubernetes.io/part-of: url-shortener
 spec:
   scaleTargetRef:
     apiVersion: apps/v1

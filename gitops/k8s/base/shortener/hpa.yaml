@@ -2,11 +2,6 @@ apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: shortener
-  namespace: url-shortener
-  labels:
-    app: shortener
-    app.kubernetes.io/name: shortener
-    app.kubernetes.io/part-of: url-shortener
 spec:
   scaleTargetRef:
     apiVersion: apps/v1

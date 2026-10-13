@@ -31,3 +31,8 @@ labels:
     pairs:
       app.kubernetes.io/part-of: url-shortener
       app.kubernetes.io/managed-by: kustomize
+
+patches:
+  - path: deployment-defaults.yml
+    target:
+      kind: Deployment

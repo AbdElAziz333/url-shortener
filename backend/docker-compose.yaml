@@ -1,26 +1,29 @@
 services:
   gateway:
-    image: abdelaziz333/gateway:${APP_VERSION}
+    image: abdelaziz333/gateway:0.0.6
     ports:
       - "8080:8080"
     build:
-      context: ./gateway
+      context: .
       dockerfile: Dockerfile
+      args:
+        APP_NAME: gateway
+        APP_PORT: ${GATEWAY_PORT}
     restart: unless-stopped
     networks:
       - url-shortener-net
     environment:
       APP_ENV: docker
-      SERVICE_NAME: gateway
-      SERVICE_PORT: 8080
+      APP_NAME: gateway
+      APP_PORT: 8080
       SHORTENER_SERVICE_URL: shortener:50051
       REDIRECT_SERVICE_URL: redirect:50052
       POSTGRES_HOST: postgres
-      POSTGRES_USER: aziz
+      POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: gateway
-      REDIS_ADDR: redis:6379
-      REDIS_USER: app
+      # REDIS_ADDR: redis:6379
+      # REDIS_USER: app
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
@@ -36,23 +39,26 @@ services:
       - app
   
   shortener:
-    image: abdelaziz333/shortener:${APP_VERSION}
+    image: abdelaziz333/shortener:0.0.6
     ports:
       - "8081:8081"
       - "50051:50051"
     build:
-      context: ./shortener
+      context: .
       dockerfile: Dockerfile
+      args:
+        APP_NAME: shortener
+        APP_PORT: ${SHORTENER_PORT}
     restart: unless-stopped
     networks:
       - url-shortener-net
     environment:
       APP_ENV: docker
-      SERVICE_NAME: shortener
-      SERVICE_PORT: 8081
+      APP_NAME: shortener
+      APP_PORT: 8081
       GRPC_PORT: 50051
       POSTGRES_HOST: postgres
-      POSTGRES_USER: aziz
+      POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: shortener
     depends_on:
@@ -63,27 +69,30 @@ services:
       - app
 
   redirect:
-    image: abdelaziz333/redirect:${APP_VERSION}
+    image: abdelaziz333/redirect:0.0.6
     ports:
       - "8082:8082"
       - "50052:50052"
     build:
-      context: ./redirect
+      context: .
       dockerfile: Dockerfile
+      args:
+        APP_NAME: redirect
+        APP_PORT: ${REDIRECT_PORT}
     restart: unless-stopped
     networks:
       - url-shortener-net
     environment:
       APP_ENV: docker
-      SERVICE_NAME: redirect
-      SERVICE_PORT: 8082
+      APP_NAME: redirect
+      APP_PORT: 8082
       GRPC_PORT: 50052
       POSTGRES_HOST: postgres
       POSTGRES_USER: aziz
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: shortener
-      REDIS_ADDR: redis:6379
-      REDIS_USER: app
+      # REDIS_ADDR: redis:6379
+      # REDIS_USER: app
       REDIS_PASSWORD: ${REDIS_PASSWORD}
     depends_on:
       postgres:
@@ -124,23 +133,25 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
-      - ./infra/redis/redis.cfg:/usr/local/etc/redis/redis.conf
-    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
     environment:
-      REDISCLI_USER: ${REDIS_USER}
-      REDISCLI_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDISCLI_AUTH: ${REDIS_PASSWORD}
+    command:
+      - sh
+      - -c
+      - exec redis-server --requirepass "${REDIS_PASSWORD}" --appendonly yes
     restart: unless-stopped
     networks:
       - url-shortener-net
     healthcheck:
-      test: ["CMD", "redis-cli", "PING"]
+      test: ["CMD-SHELL", "redis-cli --no-auth-warning PING | grep -q PONG"]
       interval: 10s
       timeout: 5s
       start_period: 60s
       retries: 10
     profiles:
-      - all
       - database
+      - all
     
 volumes:
   postgres_data:

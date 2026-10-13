@@ -2,11 +2,6 @@ apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: redirect
-  namespace: url-shortener
-  labels:
-    app: redirect
-    app.kubernetes.io/name: redirect
-    app.kubernetes.io/part-of: url-shortener
 spec:
   scaleTargetRef:
     apiVersion: apps/v1

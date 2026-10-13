@@ -58,3 +58,7 @@ dist-ssr
 # .vscode/
 /infra/redis/redis.cfg
 .secrets
+.env
+*.env
+*.secret.yaml
+secret.yaml

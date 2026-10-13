@@ -5,6 +5,7 @@ WORKDIR /app
 
 ENV CGO_ENABLED=0 GOOS=linux GOARCH=amd64
 
+WORKDIR /${APP_NAME}
 COPY go.mod go.sum ./
 
 RUN go mod download
@@ -22,6 +23,6 @@ WORKDIR /app
 COPY --from=builder /app/app .
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
-EXPOSE 8081
+EXPOSE ${APP_PORT}
 
 CMD ["./app"]
