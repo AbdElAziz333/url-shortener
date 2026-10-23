@@ -15,16 +15,10 @@ func LoadFromEnv() (*config.AppConfig, error) {
 		loadDotEnv()
 	}
 
-	grpcPort := os.Getenv("GRPC_PORT")
-	if grpcPort == "" {
-		grpcPort = "50052"
-	}
-
 	cfg := &config.AppConfig{
 		Service: config.ServiceConfig{
 			Name:     requireEnv("SERVICE_NAME"),
 			Port:     requireEnv("SERVICE_PORT"),
-			GRPCPort: grpcPort,
 		},
 		Postgres: config.PostgresConfig{
 			Host:     requireEnv("POSTGRES_HOST"),

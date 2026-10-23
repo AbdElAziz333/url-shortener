@@ -15,10 +15,8 @@ func NewRouter(resolverHandler *resolve.Handler) *gin.Engine {
 		gin.Logger(),
 	)
 
-	redirectGroup := router.Group("/redirect")
-	redirectGroup.GET("/health", healthHandler)
-
-	resolverHandler.RegisterRoutes(redirectGroup)
+	router.GET("/:code", resolverHandler.ResolveCode)
+	router.GET("/health", healthHandler)
 
 	return router
 }

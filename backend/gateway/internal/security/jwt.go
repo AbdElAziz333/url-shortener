@@ -7,12 +7,12 @@ import (
 	"aziz.dev/gateway/internal/config"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
-	"github.com/redis/go-redis/v9"
 )
 
+const issuer = "gateway"
+
 type Service interface {
-	GenerateAccessToken(userId string) (string, error)
-	GenerateRefreshToken(userId string) (string, error)
+	GenerateToken(userID uuid.UUID) (string, error)
 }
 
 type Claim struct {
@@ -21,60 +21,64 @@ type Claim struct {
 }
 
 type TokenPair struct {
-	AccessToken string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
+	Token  string `json:"token"`
 }
 
 type service struct {
 	config *config.JWTConfig
-	redisClient *redis.Client
 }
 
-func NewService(cfg *config.JWTConfig, redisClient *redis.Client) (*service, error) {
-	if len(cfg.AccessSecret) == 0 {
-		return nil, errors.New("access secret key is required")
-	}
-
-	if len(cfg.RefreshSecret) == 0 {
-		return nil, errors.New("refresh secret key is required")
+func NewService(cfg *config.JWTConfig) (Service, error) {
+	if len(cfg.Secret) == 0 {
+		return nil, errors.New("jwt secret key is required")
 	}
 
 	if cfg.RefreshExpiry <= cfg.AccessExpiry {
 		return nil, errors.New("refresh expiry must be greater than access expiry")
 	}
 
-	return &service{
-		config:      cfg,
-		redisClient: redisClient,
-	}, nil
+	return &service{config: cfg}, nil
 }
 
-func (s *service) GenerateAccessToken(userID string) (string, error) {
-	claim := Claim{
-		UserID: uuid.Must(uuid.Parse(userID)),
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * 15)),
-			IssuedAt: jwt.NewNumericDate(time.Now()),
-			Issuer: "gateway",
-			Subject: userID,
-		},
-	}
-	
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claim)
-	return token.SignedString(s.config.AccessSecret)
+func (s *service) GenerateToken(userID uuid.UUID) (string, error) {
+	return sign(userID, s.config.Secret, s.config.AccessExpiry)
 }
 
-func (s *service) GenerateRefreshToken(userID string) (string, error) {
+func (s *service) GenerateRefreshToken(userID uuid.UUID) (string, error) {
+	return sign(userID, s.config.Secret, s.config.RefreshExpiry)
+}
+
+func sign(userID uuid.UUID, secret []byte, ttl time.Duration) (string, error) {
+	now := time.Now()
+
 	claim := Claim{
-		UserID: uuid.Must(uuid.Parse(userID)),
+		UserID: userID,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour * 24 * 7)),
-			IssuedAt: jwt.NewNumericDate(time.Now()),
-			Issuer: "gateway",
-			Subject: userID,
+			ExpiresAt: jwt.NewNumericDate(now.Add(ttl)),
+			IssuedAt:  jwt.NewNumericDate(now),
+			Issuer:    issuer,
+			Subject:   userID.String(),
 		},
 	}
 
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claim)
-	return token.SignedString(s.config.RefreshSecret)
+	return jwt.NewWithClaims(jwt.SigningMethodHS256, claim).SignedString(secret)
+}
+
+// func ValidateAccessToken(cfg *config.JWTConfig, token string) (*Claim, error) {
+// 	return validate(token, cfg.AccessSecret)
+// }
+
+func ValidateToken(cfg *config.JWTConfig, token string) (*Claim, error) {
+	return validate(token, cfg.Secret)
+}
+
+func validate(token string, secret []byte) (*Claim, error) {
+	claims := &Claim{}
+	_, err := jwt.ParseWithClaims(token, claims, func(*jwt.Token) (any, error) {
+		return secret, nil
+	}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}))
+	if err != nil {
+		return nil, err
+	}
+	return claims, nil
 }

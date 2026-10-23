@@ -4,175 +4,188 @@ import (
 	"context"
 	"crypto/rand"
 	"errors"
+	"fmt"
 	"math/big"
-	"strings"
 	"time"
 
 	sqlcgen "aziz.dev/shortener/internal/postgres/sqlc"
 	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+)
+
+var (
+	ErrNotFound      = errors.New("link not found")
+	ErrCodeTaken     = errors.New("code already in use")
+	ErrInvalidExpiry = errors.New("expires_at must be in the future")
+	ErrCodeGen       = errors.New("could not generate a unique code")
+)
+
+const (
+	codeLength      = 8
+	maxCodeAttempts = 5
+	charset         = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 )
 
 type Service interface {
-	GetAll(ctx context.Context, userID uuid.UUID) ([]Dto, error)
+	GetAll(ctx context.Context, userID uuid.UUID, limit, offset int32) ([]Dto, error)
+	Get(ctx context.Context, userID uuid.UUID, code string) (*Dto, error)
 	Create(ctx context.Context, userID uuid.UUID, req CreateRequest) (*Dto, error)
-	UpdateExpiry(ctx context.Context, userID uuid.UUID, code string, req UpdateExpiryDto) error
-	// UpdateCustomAlias(ctx context.Context, userID uuid.UUID, code string, req UpdateAliasDto) error
+	UpdateExpiry(ctx context.Context, userID uuid.UUID, code string, req UpdateExpiryRequest) (*Dto, error)
 	Delete(ctx context.Context, userID uuid.UUID, code string) error
 }
 
 type service struct {
-	repo Repository
+	q sqlcgen.Querier
 }
 
-func NewService(repo Repository) Service {
+func NewService(q sqlcgen.Querier) Service {
 	return &service{
-		repo: repo,
+		q: q,
 	}
 }
 
-func (s *service) GetAll(ctx context.Context, userID uuid.UUID) ([]Dto, error) {
-	logrus.WithField("user_id", userID).Info("Fetching all links for user")
-	links, err := s.repo.FindAllByUserID(ctx, userID, Pagination{Page: 1, PageSize: 10})
+func (s *service) GetAll(ctx context.Context, userID uuid.UUID, limit, offset int32) ([]Dto, error) {
+	links, err := s.q.ListLinksByUser(ctx, sqlcgen.ListLinksByUserParams{
+		UserID: userID,
+		Limit: limit,
+		Offset: offset,
+	})
 	if err != nil {
-		logrus.WithError(err).WithField("user_id", userID).Error("Failed to fetch links")
-		return nil, err
+		return nil, fmt.Errorf("list links: %w", err)
 	}
 
-	var dtos []Dto
+	dtos := make([]Dto, 0, len(links)) // never nil -> JSON []
 	for _, l := range links {
-		dtos = append(dtos, mapToDto(l))
+		dtos = append(dtos, toDto(l))
 	}
-
-	logrus.WithField("user_id", userID).WithField("count", len(dtos)).Info("Successfully fetched links")
 	return dtos, nil
 }
 
-func (s *service) Create(ctx context.Context, userID uuid.UUID, req CreateRequest) (*Dto, error) {
-	logrus.WithField("user_id", userID).WithField("original_url", req.OriginalURL).Info("Creating new link")
-	code := req.CustomAlias
-	if code == "" {
-		var err error
-		code, err = generateRandomCode(8)
-
-		if err != nil {
-			logrus.WithError(err).Error("Failed to generate random code")
-			return nil, err
-		}
-		
-		logrus.WithField("code", code).Debug("Generated random code")
-	}
-
-	// Only store the alias when one was actually provided.
-	// Storing "" would violate the UNIQUE constraint since Postgres treats
-	// all empty strings as equal, while multiple NULLs are allowed.
-	var customAlias *string
-	if req.CustomAlias != "" {
-		customAlias = &req.CustomAlias
-	}
-
-	arg := sqlcgen.CreateLinkParams{
-		UserID:      userID,
-		Code:        code,
-		OriginalUrl: req.OriginalURL,
-		CustomAlias: customAlias,
-		ExpiresAt:   req.ExpiresAt,
-		IsActive:    true,
-		CreatedAt:   time.Now(),
-	}
-
-	result, err := s.repo.Create(ctx, arg)
+func (s *service) Get(ctx context.Context, userID uuid.UUID, code string) (*Dto, error) {
+	row, err := s.q.GetLinkByCode(ctx, sqlcgen.GetLinkByCodeParams{Code: code, UserID: userID})
 
 	if err != nil {
-		if req.CustomAlias == "" && (strings.Contains(err.Error(), "duplicate key") || strings.Contains(err.Error(), "23505")) {
-			logrus.WithField("code", code).Warn("Hash collision detected")
-		}
-
-		logrus.WithError(err).Error("Failed to create link")
-		return nil, err
+		return nil, wrapErr("get link", err)
 	}
 
-	logrus.WithField("user_id", userID).WithField("code", code).Info("Successfully created link")
-
-	return &Dto{
-		Code:        result.Code,
-		OriginalURL: result.OriginalUrl,
-		CustomAlias: result.CustomAlias,
-		ExpiresAt:   result.ExpiresAt,
-		IsActive:    result.IsActive,
-		CreatedAt:   result.CreatedAt,
-	}, nil
+	return ptr(toDto(row)), nil
 }
 
-func (s *service) UpdateExpiry(ctx context.Context, userID uuid.UUID, code string, req UpdateExpiryDto) error {
-	logrus.WithField("user_id", userID).WithField("code", code).Info("Updating link expiry")
-	link, err := s.repo.FindByCodeAndUserID(ctx, code, userID)
+func (s *service) Create(ctx context.Context, userID uuid.UUID, req CreateRequest) (*Dto, error) {
+	if req.ExpiresAt == nil {
+		return nil, ErrInvalidExpiry // or apply a default, e.g. now + 30 days
+	}
+
+	expiresAt, err := normalizeExpiry(*req.ExpiresAt)
+	if err !=  nil {
+		return nil, fmt.Errorf("normalizing expiry: %w", err)
+	}
+
+	for i := 0; i < maxCodeAttempts; i++ {
+		code, err := generateRandomCode(codeLength)
+		if err != nil {
+			return nil, fmt.Errorf("generate code: %w", err)
+		}
+
+		row, err := s.q.CreateLink(ctx, sqlcgen.CreateLinkParams{
+			UserID:      userID,
+			Code:        code,
+			OriginalUrl: req.OriginalURL,
+			ExpiresAt:   expiresAt,
+		})
+		
+		if err == nil {
+			return ptr(toDto(row)), nil
+		}
+
+		if !isUniqueViolation(err) {
+			return nil, fmt.Errorf("create link: %w", err)
+		}
+
+		// code collision: try again with a new code
+	}
+
+	return nil, ErrCodeGen
+}
+
+func (s *service) UpdateExpiry(ctx context.Context, userID uuid.UUID, code string, req UpdateExpiryRequest) (*Dto, error) {
+	if req.ExpiresAt == nil {
+		return nil, ErrInvalidExpiry // or apply a default, e.g. now + 30 days
+	}
+
+	expiresAt, err := normalizeExpiry(*req.ExpiresAt)
+	if err !=  nil {
+		return nil, fmt.Errorf("normalizing expiry: %w", err)
+	}
+
+	row, err := s.q.UpdateLinkExpiry(ctx, sqlcgen.UpdateLinkExpiryParams{
+		Code:      code,
+		UserID:    userID,
+		ExpiresAt: expiresAt,
+	})
+
 	if err != nil {
-		logrus.WithError(err).WithField("user_id", userID).WithField("code", code).Error("Failed to find link")
-		return errors.New("link not found or unauthorized")
+		return nil, wrapErr("update expiry", err)
 	}
 
-	link.ExpiresAt = req.ExpiresAt
-	arg := sqlcgen.UpdateLinkParams{
-		ExpiresAt: link.ExpiresAt,
-	}
-
-	id, err := s.repo.Update(ctx, arg)
-
-	if err != nil {
-		logrus.WithError(err).Error("Failed to update link with id:", id)
-		return err
-	}
-
-	logrus.WithField("user_id", userID).WithField("code", code).Info("Successfully updated link expiry")
-	return nil
+	return ptr(toDto(row)), nil
 }
 
 func (s *service) Delete(ctx context.Context, userID uuid.UUID, code string) error {
-    logrus.WithField("user_id", userID).WithField("code", code).Info("Deleting link")
-    
-    link, err := s.repo.FindByCodeAndUserID(ctx, code, userID)
-    if err != nil {
-        logrus.WithError(err).WithField("user_id", userID).WithField("code", code).Error("Failed to find link")
-        return errors.New("link not found or unauthorized")
-    }
+	n, err := s.q.DeactivateLink(ctx, sqlcgen.DeactivateLinkParams{Code: code, UserID: userID})
+	if err != nil {
+		return fmt.Errorf("delete link: %w", err)
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
 
-    now := time.Now().UTC()
+func normalizeExpiry(t time.Time) (time.Time, error) {
+	y, m, d := t.UTC().Date()
+	expiry := time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
 
-    arg := sqlcgen.UpdateLinkParams{
-        ID:          link.ID,
-        Code:        link.Code,
-        OriginalUrl: link.OriginalUrl,
-        CustomAlias: link.CustomAlias,
-        ExpiresAt:   &now,
-        IsActive:    false, // Soft-delete
-    }
+	ny, nm, nd := time.Now().UTC().Date()
+	today := time.Date(ny, nm, nd, 0, 0, 0, 0, time.UTC)
 
-    rowsAffected, err := s.repo.Update(ctx, arg)
-    if err != nil {
-        logrus.WithError(err).Error("Failed to delete link")
-        return err
-    }
+	// Must be strictly in the future (tomorrow or later).
+	// Use expiry.Before(today) instead if "today" should be allowed.
+	if !expiry.After(today) {
+		return time.Time{}, ErrInvalidExpiry
+	}
 
-    if rowsAffected == 0 {
-        return errors.New("link not found or already deleted")
-    }
+	return expiry, nil
+}
 
-    logrus.WithField("user_id", userID).WithField("code", code).Info("Successfully deleted link")
-    return nil
+// wrapErr maps "no rows" to ErrNotFound and wraps anything else with context.
+func wrapErr(op string, err error) error {
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrNotFound
+	}
+	
+	return fmt.Errorf("%s: %w", op, err)
+}
+
+func isUniqueViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505"
 }
 
 func generateRandomCode(length int) (string, error) {
-	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	b := make([]byte, length)
-
+	max := big.NewInt(int64(len(charset)))
 	for i := range b {
-		n, err := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
+		n, err := rand.Int(rand.Reader, max)
 		if err != nil {
 			return "", err
 		}
 		b[i] = charset[n.Int64()]
 	}
-
 	return string(b), nil
+}
+
+func ptr[T any](v T) *T {
+	return &v
 }

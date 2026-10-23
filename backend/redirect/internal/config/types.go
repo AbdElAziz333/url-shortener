@@ -34,7 +34,6 @@ func (c *AppConfig) Validate() error {
 type ServiceConfig struct {
 	Name     string
 	Port     string
-	GRPCPort string
 }
 
 type PostgresConfig struct {

@@ -1,8 +1,0 @@
-ALTER TABLE links
-    ALTER COLUMN created_at TYPE TIMESTAMPTZ(0)
-    USING DATE_TRUNC('second', created_at),
-    ALTER COLUMN created_at SET DEFAULT CURRENT_TIMESTAMP(0),
-    
-    ALTER COLUMN expires_at TYPE TIMESTAMPTZ(0)
-    USING DATE_TRUNC('second', expires_at),
-    ALTER COLUMN expires_at SET DEFAULT CURRENT_TIMESTAMP(0);

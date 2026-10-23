@@ -5,11 +5,7 @@ type LoginRequest struct {
 	Password string `json:"password"`
 }
 
-type RegisterRequest struct {
+type SignupRequest struct {
 	Email string `json:"email"`
 	Password string `json:"password"`
-}
-
-type Dto struct {
-	Email string `json:"email"`
 }

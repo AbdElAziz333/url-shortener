@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 
@@ -43,7 +44,14 @@ func (s *grpcServer) GetAllLinks(ctx context.Context, req *pb.GetAllLinksRequest
 		return nil, status.Error(codes.InvalidArgument, "invalid user id")
 	}
 
-	links, err := s.service.GetAll(ctx, userID)
+	limit := req.GetLimit()
+
+	if limit <= 0 {
+		limit = 20
+	}
+
+	offset := req.GetOffset()
+	links, err := s.service.GetAll(ctx, userID, limit, offset)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
@@ -56,6 +64,19 @@ func (s *grpcServer) GetAllLinks(ctx context.Context, req *pb.GetAllLinksRequest
 	return resp, nil
 }
 
+func (s *grpcServer) GetLinkByCode(ctx context.Context, req *pb.GetLinkByCodeRequest) (*pb.GetLinkByCodeResponse, error) {
+	uid, err := parseUserID(req.GetUserId())
+	if err != nil {
+		return nil, err
+	}
+ 
+	dto, err := s.service.Get(ctx, uid, req.GetCode())
+	if err != nil {
+		return nil, toStatus(err)
+	}
+	return &pb.GetLinkByCodeResponse{Link: dtoToProto(dto)}, nil
+}
+
 func (s *grpcServer) CreateLink(ctx context.Context, req *pb.CreateLinkRequest) (*pb.CreateLinkResponse, error) {
 	userID, err := uuid.Parse(req.GetUserId())
 	if err != nil {
@@ -64,9 +85,6 @@ func (s *grpcServer) CreateLink(ctx context.Context, req *pb.CreateLinkRequest) 
 
 	createReq := link.CreateRequest{
 		OriginalURL: req.GetOriginalUrl(),
-	}
-	if req.CustomAlias != nil {
-		createReq.CustomAlias = *req.CustomAlias
 	}
 	if req.ExpiresAt != nil {
 		t := req.ExpiresAt.AsTime()
@@ -92,9 +110,10 @@ func (s *grpcServer) UpdateExpiry(ctx context.Context, req *pb.UpdateExpiryReque
 	}
 
 	expiresAt := req.ExpiresAt.AsTime()
-	updateReq := link.UpdateExpiryDto{ExpiresAt: &expiresAt}
+	updateReq := link.UpdateExpiryRequest{ExpiresAt: &expiresAt}
 
-	if err := s.service.UpdateExpiry(ctx, userID, req.GetCode(), updateReq); err != nil {
+	_, err = s.service.UpdateExpiry(ctx, userID, req.GetCode(), updateReq)
+	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
@@ -115,17 +134,32 @@ func (s *grpcServer) DeleteLink(ctx context.Context, req *pb.DeleteLinkRequest) 
 }
 
 func dtoToProto(d *link.Dto) *pb.Link {
-	l := &pb.Link{
+	return &pb.Link{
 		Code:        d.Code,
 		OriginalUrl: d.OriginalURL,
+		ExpiresAt: timestamppb.New(d.ExpiresAt),
 		IsActive:    d.IsActive,
 		CreatedAt:   timestamppb.New(d.CreatedAt),
 	}
-	if d.CustomAlias != nil {
-		l.CustomAlias = d.CustomAlias
+}
+
+func parseUserID(s string) (uuid.UUID, error) {
+	id, err := uuid.Parse(s)
+	if err != nil {
+		return uuid.Nil, status.Error(codes.InvalidArgument, "invalid user id")
 	}
-	if d.ExpiresAt != nil {
-		l.ExpiresAt = timestamppb.New(*d.ExpiresAt)
+	return id, nil
+}
+ 
+// toStatus maps domain errors to gRPC codes; unexpected errors are logged once here.
+func toStatus(err error) error {
+	switch {
+	case errors.Is(err, link.ErrNotFound):
+		return status.Error(codes.NotFound, err.Error())
+	case errors.Is(err, link.ErrInvalidExpiry):
+		return status.Error(codes.InvalidArgument, err.Error())
+	default:
+		logrus.WithError(err).Error("request failed")
+		return status.Error(codes.Internal, "internal server error")
 	}
-	return l
 }

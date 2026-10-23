@@ -4,15 +4,25 @@ import (
 	"net/http"
 	"time"
 
-	redirectpb "aziz.dev/gateway/internal/pb/redirect"
+	"aziz.dev/gateway/internal/middleware"
 	shortenerpb "aziz.dev/gateway/internal/pb/shortener"
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
+
+// grpcToHTTP maps gRPC status codes to HTTP statuses; anything missing becomes a 500.
+var grpcToHTTP = map[codes.Code]int{
+	codes.InvalidArgument:    http.StatusBadRequest,
+	codes.NotFound:           http.StatusNotFound,
+	codes.AlreadyExists:      http.StatusConflict,
+	codes.PermissionDenied:   http.StatusForbidden,
+	codes.FailedPrecondition: http.StatusGone,
+	codes.Unavailable:        http.StatusServiceUnavailable,
+	codes.DeadlineExceeded:   http.StatusGatewayTimeout,
+}
 
 type Handler struct {
 	clients *Clients
@@ -23,34 +33,34 @@ func NewHandler(clients *Clients) *Handler {
 }
 
 func (h *Handler) GetAllLinks(c *gin.Context) {
-	userID, ok := userIDFromContext(c)
-	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid or missing user id"})
-		return
-	}
-
 	resp, err := h.clients.Shortener.GetAllLinks(c.Request.Context(), &shortenerpb.GetAllLinksRequest{
-		UserId: userID.String(),
+		UserId: currentUserID(c),
 	})
 	if err != nil {
 		writeGRPCError(c, err)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": protoLinksToJSON(resp.GetLinks())})
+	c.JSON(http.StatusOK, gin.H{"data": linksToJSON(resp.GetLinks())})
 }
 
-func (h *Handler) CreateLink(c *gin.Context) {
-	userID, ok := userIDFromContext(c)
-	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid or missing user id"})
+func (h *Handler) GetLinkByCode(c *gin.Context) {
+	resp, err := h.clients.Shortener.GetLinkByCode(c.Request.Context(), &shortenerpb.GetLinkByCodeRequest{
+		UserId: currentUserID(c),
+		Code: c.Param("code"),
+	})
+	if err != nil {
+		writeGRPCError(c, err)
 		return
 	}
 
+	c.JSON(http.StatusOK, gin.H{"data": linkToJSON(resp.GetLink())})
+}
+
+func (h *Handler) CreateLink(c *gin.Context) {
 	var body struct {
 		OriginalURL string     `json:"original_url" binding:"required,url"`
-		CustomAlias string     `json:"custom_alias,omitempty" binding:"omitempty,alphanum"`
-		ExpiresAt   *time.Time `json:"expires_at,omitempty"`
+		ExpiresAt   *time.Time `json:"expires_at"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -58,11 +68,8 @@ func (h *Handler) CreateLink(c *gin.Context) {
 	}
 
 	req := &shortenerpb.CreateLinkRequest{
-		UserId:      userID.String(),
+		UserId:      currentUserID(c),
 		OriginalUrl: body.OriginalURL,
-	}
-	if body.CustomAlias != "" {
-		req.CustomAlias = &body.CustomAlias
 	}
 	if body.ExpiresAt != nil {
 		req.ExpiresAt = timestamppb.New(*body.ExpiresAt)
@@ -74,16 +81,10 @@ func (h *Handler) CreateLink(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": protoLinkToJSON(resp.GetLink())})
+	c.JSON(http.StatusCreated, gin.H{"data": linkToJSON(resp.GetLink())})
 }
 
 func (h *Handler) UpdateExpiry(c *gin.Context) {
-	userID, ok := userIDFromContext(c)
-	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid or missing user id"})
-		return
-	}
-
 	var body struct {
 		ExpiresAt time.Time `json:"expires_at" binding:"required"`
 	}
@@ -93,7 +94,7 @@ func (h *Handler) UpdateExpiry(c *gin.Context) {
 	}
 
 	_, err := h.clients.Shortener.UpdateExpiry(c.Request.Context(), &shortenerpb.UpdateExpiryRequest{
-		UserId:    userID.String(),
+		UserId:    currentUserID(c),
 		Code:      c.Param("code"),
 		ExpiresAt: timestamppb.New(body.ExpiresAt),
 	})
@@ -106,14 +107,8 @@ func (h *Handler) UpdateExpiry(c *gin.Context) {
 }
 
 func (h *Handler) DeleteLink(c *gin.Context) {
-	userID, ok := userIDFromContext(c)
-	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid or missing user id"})
-		return
-	}
-
 	_, err := h.clients.Shortener.DeleteLink(c.Request.Context(), &shortenerpb.DeleteLinkRequest{
-		UserId: userID.String(),
+		UserId: currentUserID(c),
 		Code:   c.Param("code"),
 	})
 	if err != nil {
@@ -124,72 +119,40 @@ func (h *Handler) DeleteLink(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "successfully deleted link"})
 }
 
-func (h *Handler) ResolveCode(c *gin.Context) {
-	code := c.Param("code")
-	if code == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "code is required"})
-		return
-	}
-
-	resp, err := h.clients.Redirect.ResolveCode(c.Request.Context(), &redirectpb.ResolveCodeRequest{
-		Code: code,
-	})
-	if err != nil {
-		writeGRPCError(c, err)
-		return
-	}
-
-	c.Redirect(http.StatusFound, resp.GetOriginalUrl())
+// currentUserID returns the ID set by AccessTokenMiddleware, which has already
+// validated it, so the routes using this must sit behind that middleware.
+func currentUserID(c *gin.Context) string {
+	return c.GetString(middleware.UserIDKey)
 }
 
-func userIDFromContext(c *gin.Context) (uuid.UUID, bool) {
-	v, ok := c.Get("userID")
-	if !ok {
-		return uuid.UUID{}, false
-	}
-	id, ok := v.(string)
-	if !ok || id == "" {
-		return uuid.UUID{}, false
-	}
-	userID, err := uuid.Parse(id)
-	if err != nil {
-		return uuid.UUID{}, false
-	}
-	return userID, true
-}
-
+// writeGRPCError translates a gRPC error into an HTTP response. Server-side
+// failures are logged and returned with a generic message so internals don't leak.
 func writeGRPCError(c *gin.Context, err error) {
-	st, ok := status.FromError(err)
+	st := status.Convert(err)
+
+	httpStatus, ok := grpcToHTTP[st.Code()]
 	if !ok {
-		logrus.WithError(err).Error("unexpected gRPC error")
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
-		return
+		httpStatus = http.StatusInternalServerError
 	}
 
-	switch st.Code() {
-	case codes.InvalidArgument:
-		c.JSON(http.StatusBadRequest, gin.H{"error": st.Message()})
-	case codes.NotFound:
-		c.JSON(http.StatusNotFound, gin.H{"error": st.Message()})
-	case codes.FailedPrecondition:
-		c.JSON(http.StatusGone, gin.H{"error": st.Message()})
-	case codes.Unavailable:
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": st.Message()})
-	default:
-		logrus.WithError(err).Error("gRPC call failed")
-		c.JSON(http.StatusInternalServerError, gin.H{"error": st.Message()})
+	msg := st.Message()
+	if httpStatus >= http.StatusInternalServerError {
+		logrus.WithError(err).WithField("path", c.FullPath()).Error("gRPC call failed")
+		msg = http.StatusText(httpStatus)
 	}
+
+	c.JSON(httpStatus, gin.H{"error": msg})
 }
 
-func protoLinksToJSON(links []*shortenerpb.Link) []gin.H {
+func linksToJSON(links []*shortenerpb.Link) []gin.H {
 	out := make([]gin.H, 0, len(links))
 	for _, link := range links {
-		out = append(out, protoLinkToJSON(link))
+		out = append(out, linkToJSON(link))
 	}
 	return out
 }
 
-func protoLinkToJSON(link *shortenerpb.Link) gin.H {
+func linkToJSON(link *shortenerpb.Link) gin.H {
 	if link == nil {
 		return gin.H{}
 	}
@@ -198,9 +161,6 @@ func protoLinkToJSON(link *shortenerpb.Link) gin.H {
 		"code":         link.GetCode(),
 		"original_url": link.GetOriginalUrl(),
 		"is_active":    link.GetIsActive(),
-	}
-	if link.CustomAlias != nil {
-		item["custom_alias"] = link.GetCustomAlias()
 	}
 	if link.ExpiresAt != nil {
 		item["expires_at"] = link.GetExpiresAt().AsTime()

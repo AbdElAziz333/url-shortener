@@ -18,10 +18,6 @@ func NewHandler(service Service) *Handler {
 	}
 }
 
-func (h *Handler) RegisterRoutes(r *gin.RouterGroup) {
-	r.GET("/:code", h.ResolveCode)
-}
-
 func (h *Handler) ResolveCode(c *gin.Context) {
 	code := c.Param("code")
 	logrus.WithField("code", code).Info("Received resolve request")

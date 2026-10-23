@@ -1,91 +1,45 @@
 package proxy
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"net/http/httputil"
-	url2 "net/url"
+	"net/url"
 	"strings"
-	"sync"
 
+	"aziz.dev/gateway/internal/middleware"
 	"github.com/gin-gonic/gin"
 )
 
-// Put userIDKey at package level, outside any function
-type contextKey string
+const userIDHeader = "User-ID"
 
-const userIDKey contextKey = "userID"
-
-var (
-	transportsMu sync.RWMutex
-	transports   = make(map[string]http.RoundTripper)
-)
-
-func getOrCreateTransport(target string) http.RoundTripper {
-	transportsMu.RLock()
-	tr, ok := transports[target]
-	transportsMu.RUnlock()
-	if ok {
-		return tr
-	}
-
-	transportsMu.Lock()
-	defer transportsMu.Unlock()
-	if tr, ok = transports[target]; ok {
-		return tr
-	}
-
-	url, err := url2.Parse(target)
-	var name string
-	if err == nil {
-		name = url.Host
-	} else {
-		name = target
-	}
-	tr = NewCircuitBreakerRoundTripper(name, nil)
-	transports[target] = tr
-	return tr
-}
-
-func ReverseProxy(fromPrefix, toPrefix, target string) gin.HandlerFunc {
-	url, err := url2.Parse(target)
+// ReverseProxy forwards requests to target, rewriting the fromPrefix of the
+// path to toPrefix and passing the authenticated user ID downstream.
+func ReverseProxy(fromPrefix, toPrefix, target string) (gin.HandlerFunc, error) {
+	targetURL, err := url.Parse(target)
 	if err != nil {
-		panic(fmt.Sprintf("invalid service url %s: %v", target, err))
+		return nil, fmt.Errorf("invalid service url %q: %w", target, err)
 	}
 
-	proxy := httputil.NewSingleHostReverseProxy(url)
-	proxy.Transport = getOrCreateTransport(target)
-
-	originalDirector := proxy.Director
+	proxy := httputil.NewSingleHostReverseProxy(targetURL)
+	director := proxy.Director
 	proxy.Director = func(req *http.Request) {
-		originalDirector(req)
+		originalHost := req.Host
+		director(req)
 
 		if strings.HasPrefix(req.URL.Path, fromPrefix) {
 			req.URL.Path = toPrefix + strings.TrimPrefix(req.URL.Path, fromPrefix)
 		}
-
-		req.Header.Set("Forwarded-Host", req.Header.Get("Host"))
-		req.Host = url.Host
-
-		// Read userID from context and set header here, AFTER originalDirector ran
-		if id, ok := req.Context().Value(userIDKey).(string); ok && id != "" {
-			req.Header.Set("User-ID", id)
-		}
+		req.Header.Set("X-Forwarded-Host", originalHost)
+		req.Host = targetURL.Host
 	}
 
 	return func(c *gin.Context) {
-		if v, ok := c.Get("userID"); ok {
-			if id, ok2 := v.(string); ok2 {
-				// Set header directly so downstream always receives it.
-				c.Request.Header.Set("User-ID", id)
-				c.Request = c.Request.WithContext(
-					context.WithValue(c.Request.Context(), userIDKey, id),
-				)
-			}
+		// Never trust a client-supplied User-ID; only the auth middleware may set it.
+		c.Request.Header.Del(userIDHeader)
+		if id := c.GetString(middleware.UserIDKey); id != "" {
+			c.Request.Header.Set(userIDHeader, id)
 		}
-
 		proxy.ServeHTTP(c.Writer, c.Request)
-	}
+	}, nil
 }
-

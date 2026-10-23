@@ -1,6 +1,7 @@
 package configloader
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -10,73 +11,65 @@ import (
 	"github.com/joho/godotenv"
 )
 
+// like that so it can work locally, docker and k8s
 func LoadFromEnv() (*config.AppConfig, error) {
-	appEnv := os.Getenv("APP_ENV")
-	if appEnv == "local" || appEnv == "" {
-		_, filename, _, ok := runtime.Caller(0)
-		if ok {
-			dir := filepath.Dir(filename)
-			envPath := filepath.Join(dir, "..", "..", ".env")
-			_ = godotenv.Load(envPath)
-		} else {
-			_ = godotenv.Load("gateway/.env")
-		}
+	if env := os.Getenv("APP_ENV"); env == "" || env == "local" {
+		loadDotEnv()
 	}
 
-	serviceName := os.Getenv("SERVICE_NAME")
-	servicePort := os.Getenv("SERVICE_PORT")
+	accessExpiry, err := durationFromEnv("JWT_ACCESS_EXPIRY")
+	if err != nil {
+		return nil, err
+	}
 
-	shortenerServiceURL := os.Getenv("SHORTENER_SERVICE_URL")
-	redirectServiceURL := os.Getenv("REDIRECT_SERVICE_URL")
-
-	// postgres
-	postgresHost := os.Getenv("POSTGRES_HOST")
-	postgresUser := os.Getenv("POSTGRES_USER")
-	postgresPassword := os.Getenv("POSTGRES_PASSWORD")
-	postgresDB := os.Getenv("POSTGRES_DB")
-
-	// redis
-	redisAddr := os.Getenv("REDIS_ADDR")
-	redisUser := os.Getenv("REDIS_USER")
-	redisPassword := os.Getenv("REDIS_PASSWORD")
-
-	// jwt
-	accessSecret := os.Getenv("JWT_ACCESS_SECRET")
-	refreshSecret := os.Getenv("JWT_REFRESH_SECRET")
-	accessExpiry := os.Getenv("JWT_ACCESS_EXPIRY")
-	refreshExpiry := os.Getenv("JWT_REFRESH_EXPIRY")
+	refreshExpiry, err := durationFromEnv("JWT_REFRESH_EXPIRY")
+	if err != nil {
+		return nil, err
+	}
 
 	return &config.AppConfig{
 		Service: config.ServiceConfig{
-			Name: serviceName,
-			Port: servicePort,
-			ShortenerServiceURL: shortenerServiceURL,
-			RedirectServiceURL: redirectServiceURL,
+			Name: os.Getenv("SERVICE_NAME"),
+			Port: os.Getenv("SERVICE_PORT"),
+			ShortenerServiceURL: os.Getenv("SHORTENER_SERVICE_URL"),
 		},
 		Postgres: config.PostgresConfig{
-			Host: postgresHost,
-			User: postgresUser,
-			Password: postgresPassword,
-			DBName: postgresDB,
+			Host: os.Getenv("POSTGRES_HOST"),
+			User: os.Getenv("POSTGRES_USER"),
+			Password: os.Getenv("POSTGRES_PASSWORD"),
+			DBName: os.Getenv("POSTGRES_DB"),
 		},
 		Redis: config.RedisConfig{
-			Addr: redisAddr,
-			Username: redisUser,
-			Password: redisPassword,
+			Addr: os.Getenv("REDIS_ADDR"),
+			Username: os.Getenv("REDIS_USER"),
+			Password: os.Getenv("REDIS_PASSWORD"),
 		},
 		JWT: config.JWTConfig{
-			AccessSecret: []byte(accessSecret),
-			RefreshSecret: []byte(refreshSecret),
-			AccessExpiry: parseDuration(accessExpiry),
-			RefreshExpiry: parseDuration(refreshExpiry),
+			Secret: []byte(os.Getenv("JWT_SECRET")),
+			AccessExpiry: accessExpiry,
+			RefreshExpiry: refreshExpiry,
 		},
 	}, nil
 }
 
-func parseDuration(d string) time.Duration {
-	dur, err := time.ParseDuration(d)
-	if err != nil {
-		return 0
+func loadDotEnv() {
+	if _, file, _, ok := runtime.Caller(0); ok {
+		_ = godotenv.Load(filepath.Join(filepath.Dir(file), "..", "..", ".env"))
 	}
-	return dur
+}
+
+func durationFromEnv(key string) (time.Duration, error) {
+	value := os.Getenv(key)
+	
+	if value == "" {
+		return 0, fmt.Errorf("%s is required", key)
+	}
+
+	d, err := time.ParseDuration(value)
+
+	if err != nil {
+		return 0, fmt.Errorf("invalid %s %q: %w", key, value, err)
+	}
+
+	return d, nil
 }

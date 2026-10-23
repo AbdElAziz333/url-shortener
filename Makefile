@@ -15,19 +15,17 @@ endif
 # Protobuf
 
 generate_proto:
-	cd shortener && mkdir -p internal/pb && protoc --proto_path=../proto --go_out=internal/pb --go_opt=paths=source_relative --go-grpc_out=internal/pb --go-grpc_opt=paths=source_relative ../proto/shortener.proto
-	cd redirect && mkdir -p internal/pb && protoc --proto_path=../proto --go_out=internal/pb --go_opt=paths=source_relative --go-grpc_out=internal/pb --go-grpc_opt=paths=source_relative ../proto/redirect.proto
-	cd gateway && mkdir -p internal/pb/shortener internal/pb/redirect && protoc --proto_path=../proto --go_out=internal/pb/shortener --go_opt=paths=source_relative --go_opt=Mshortener.proto=aziz.dev/gateway/internal/pb/shortener --go-grpc_out=internal/pb/shortener --go-grpc_opt=paths=source_relative --go-grpc_opt=Mshortener.proto=aziz.dev/gateway/internal/pb/shortener ../proto/shortener.proto
-	cd gateway && protoc --proto_path=../proto --go_out=internal/pb/redirect --go_opt=paths=source_relative --go_opt=Mredirect.proto=aziz.dev/gateway/internal/pb/redirect --go-grpc_out=internal/pb/redirect --go-grpc_opt=paths=source_relative --go-grpc_opt=Mredirect.proto=aziz.dev/gateway/internal/pb/redirect ../proto/redirect.proto
+	cd backend/shortener && mkdir -p internal/pb && protoc --proto_path=../proto --go_out=internal/pb --go_opt=paths=source_relative --go-grpc_out=internal/pb --go-grpc_opt=paths=source_relative ../proto/shortener.proto
+	cd backend/gateway && mkdir -p internal/pb/shortener && protoc --proto_path=../proto --go_out=internal/pb/shortener --go_opt=paths=source_relative --go_opt=Mshortener.proto=aziz.dev/gateway/internal/pb/shortener --go-grpc_out=internal/pb/shortener --go-grpc_opt=paths=source_relative --go-grpc_opt=Mshortener.proto=aziz.dev/gateway/internal/pb/shortener ../proto/shortener.proto
 
 # Run Locally
 
 run_gateway:
-	cd gateway && go run cmd/main.go
+	cd backend/gateway && go run cmd/main.go
 run_shortener:
-	cd shortener && go run cmd/main.go
+	cd backend/shortener && go run cmd/main.go
 run_redirect:
-	cd redirect && go run cmd/main.go
+	cd backend/redirect && go run cmd/main.go
 
 # Run Unit Tests
 
@@ -62,9 +60,9 @@ run_all_performance_tests: run_gateway_performance_tests run_shortener_performan
 # SQL Migrations
 
 migrate_gateway:
-	migrate -database postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/gateway?sslmode=disable -path gateway/migrations up
+	migrate -database postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/gateway?sslmode=disable -path backend/gateway/migrations up
 migrate_shortener:
-	migrate -database postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/shortener?sslmode=disable -path shortener/migrations up
+	migrate -database postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/shortener?sslmode=disable -path backend/migrations/shortener up
 run_all_migrations: migrate_gateway migrate_shortener
 
 # Docker

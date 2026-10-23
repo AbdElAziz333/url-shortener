@@ -26,10 +26,9 @@ type Link struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Code          string                 `protobuf:"bytes,1,opt,name=code,proto3" json:"code,omitempty"`
 	OriginalUrl   string                 `protobuf:"bytes,2,opt,name=original_url,json=originalUrl,proto3" json:"original_url,omitempty"`
-	CustomAlias   *string                `protobuf:"bytes,3,opt,name=custom_alias,json=customAlias,proto3,oneof" json:"custom_alias,omitempty"`
-	ExpiresAt     *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
-	IsActive      bool                   `protobuf:"varint,5,opt,name=is_active,json=isActive,proto3" json:"is_active,omitempty"`
-	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	ExpiresAt     *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
+	IsActive      bool                   `protobuf:"varint,4,opt,name=is_active,json=isActive,proto3" json:"is_active,omitempty"`
+	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -78,13 +77,6 @@ func (x *Link) GetOriginalUrl() string {
 	return ""
 }
 
-func (x *Link) GetCustomAlias() string {
-	if x != nil && x.CustomAlias != nil {
-		return *x.CustomAlias
-	}
-	return ""
-}
-
 func (x *Link) GetExpiresAt() *timestamppb.Timestamp {
 	if x != nil {
 		return x.ExpiresAt
@@ -109,6 +101,8 @@ func (x *Link) GetCreatedAt() *timestamppb.Timestamp {
 type GetAllLinksRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	Limit         int32                  `protobuf:"varint,2,opt,name=limit,proto3" json:"limit,omitempty"`
+	Offset        int32                  `protobuf:"varint,3,opt,name=offset,proto3" json:"offset,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -148,6 +142,20 @@ func (x *GetAllLinksRequest) GetUserId() string {
 		return x.UserId
 	}
 	return ""
+}
+
+func (x *GetAllLinksRequest) GetLimit() int32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+func (x *GetAllLinksRequest) GetOffset() int32 {
+	if x != nil {
+		return x.Offset
+	}
+	return 0
 }
 
 type GetAllLinksResponse struct {
@@ -194,19 +202,114 @@ func (x *GetAllLinksResponse) GetLinks() []*Link {
 	return nil
 }
 
+type GetLinkByCodeRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	Code          string                 `protobuf:"bytes,2,opt,name=code,proto3" json:"code,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetLinkByCodeRequest) Reset() {
+	*x = GetLinkByCodeRequest{}
+	mi := &file_shortener_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetLinkByCodeRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetLinkByCodeRequest) ProtoMessage() {}
+
+func (x *GetLinkByCodeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_shortener_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetLinkByCodeRequest.ProtoReflect.Descriptor instead.
+func (*GetLinkByCodeRequest) Descriptor() ([]byte, []int) {
+	return file_shortener_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *GetLinkByCodeRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+func (x *GetLinkByCodeRequest) GetCode() string {
+	if x != nil {
+		return x.Code
+	}
+	return ""
+}
+
+type GetLinkByCodeResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Link          *Link                  `protobuf:"bytes,1,opt,name=link,proto3" json:"link,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetLinkByCodeResponse) Reset() {
+	*x = GetLinkByCodeResponse{}
+	mi := &file_shortener_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetLinkByCodeResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetLinkByCodeResponse) ProtoMessage() {}
+
+func (x *GetLinkByCodeResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_shortener_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetLinkByCodeResponse.ProtoReflect.Descriptor instead.
+func (*GetLinkByCodeResponse) Descriptor() ([]byte, []int) {
+	return file_shortener_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *GetLinkByCodeResponse) GetLink() *Link {
+	if x != nil {
+		return x.Link
+	}
+	return nil
+}
+
 type CreateLinkRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
 	OriginalUrl   string                 `protobuf:"bytes,2,opt,name=original_url,json=originalUrl,proto3" json:"original_url,omitempty"`
-	CustomAlias   *string                `protobuf:"bytes,3,opt,name=custom_alias,json=customAlias,proto3,oneof" json:"custom_alias,omitempty"`
-	ExpiresAt     *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
+	ExpiresAt     *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *CreateLinkRequest) Reset() {
 	*x = CreateLinkRequest{}
-	mi := &file_shortener_proto_msgTypes[3]
+	mi := &file_shortener_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -218,7 +321,7 @@ func (x *CreateLinkRequest) String() string {
 func (*CreateLinkRequest) ProtoMessage() {}
 
 func (x *CreateLinkRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_shortener_proto_msgTypes[3]
+	mi := &file_shortener_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -231,7 +334,7 @@ func (x *CreateLinkRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateLinkRequest.ProtoReflect.Descriptor instead.
 func (*CreateLinkRequest) Descriptor() ([]byte, []int) {
-	return file_shortener_proto_rawDescGZIP(), []int{3}
+	return file_shortener_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *CreateLinkRequest) GetUserId() string {
@@ -244,13 +347,6 @@ func (x *CreateLinkRequest) GetUserId() string {
 func (x *CreateLinkRequest) GetOriginalUrl() string {
 	if x != nil {
 		return x.OriginalUrl
-	}
-	return ""
-}
-
-func (x *CreateLinkRequest) GetCustomAlias() string {
-	if x != nil && x.CustomAlias != nil {
-		return *x.CustomAlias
 	}
 	return ""
 }
@@ -271,7 +367,7 @@ type CreateLinkResponse struct {
 
 func (x *CreateLinkResponse) Reset() {
 	*x = CreateLinkResponse{}
-	mi := &file_shortener_proto_msgTypes[4]
+	mi := &file_shortener_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -283,7 +379,7 @@ func (x *CreateLinkResponse) String() string {
 func (*CreateLinkResponse) ProtoMessage() {}
 
 func (x *CreateLinkResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_shortener_proto_msgTypes[4]
+	mi := &file_shortener_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -296,7 +392,7 @@ func (x *CreateLinkResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateLinkResponse.ProtoReflect.Descriptor instead.
 func (*CreateLinkResponse) Descriptor() ([]byte, []int) {
-	return file_shortener_proto_rawDescGZIP(), []int{4}
+	return file_shortener_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *CreateLinkResponse) GetLink() *Link {
@@ -317,7 +413,7 @@ type UpdateExpiryRequest struct {
 
 func (x *UpdateExpiryRequest) Reset() {
 	*x = UpdateExpiryRequest{}
-	mi := &file_shortener_proto_msgTypes[5]
+	mi := &file_shortener_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -329,7 +425,7 @@ func (x *UpdateExpiryRequest) String() string {
 func (*UpdateExpiryRequest) ProtoMessage() {}
 
 func (x *UpdateExpiryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_shortener_proto_msgTypes[5]
+	mi := &file_shortener_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -342,7 +438,7 @@ func (x *UpdateExpiryRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateExpiryRequest.ProtoReflect.Descriptor instead.
 func (*UpdateExpiryRequest) Descriptor() ([]byte, []int) {
-	return file_shortener_proto_rawDescGZIP(), []int{5}
+	return file_shortener_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *UpdateExpiryRequest) GetUserId() string {
@@ -375,7 +471,7 @@ type UpdateExpiryResponse struct {
 
 func (x *UpdateExpiryResponse) Reset() {
 	*x = UpdateExpiryResponse{}
-	mi := &file_shortener_proto_msgTypes[6]
+	mi := &file_shortener_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -387,7 +483,7 @@ func (x *UpdateExpiryResponse) String() string {
 func (*UpdateExpiryResponse) ProtoMessage() {}
 
 func (x *UpdateExpiryResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_shortener_proto_msgTypes[6]
+	mi := &file_shortener_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -400,7 +496,7 @@ func (x *UpdateExpiryResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateExpiryResponse.ProtoReflect.Descriptor instead.
 func (*UpdateExpiryResponse) Descriptor() ([]byte, []int) {
-	return file_shortener_proto_rawDescGZIP(), []int{6}
+	return file_shortener_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *UpdateExpiryResponse) GetMessage() string {
@@ -420,7 +516,7 @@ type DeleteLinkRequest struct {
 
 func (x *DeleteLinkRequest) Reset() {
 	*x = DeleteLinkRequest{}
-	mi := &file_shortener_proto_msgTypes[7]
+	mi := &file_shortener_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -432,7 +528,7 @@ func (x *DeleteLinkRequest) String() string {
 func (*DeleteLinkRequest) ProtoMessage() {}
 
 func (x *DeleteLinkRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_shortener_proto_msgTypes[7]
+	mi := &file_shortener_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -445,7 +541,7 @@ func (x *DeleteLinkRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteLinkRequest.ProtoReflect.Descriptor instead.
 func (*DeleteLinkRequest) Descriptor() ([]byte, []int) {
-	return file_shortener_proto_rawDescGZIP(), []int{7}
+	return file_shortener_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *DeleteLinkRequest) GetUserId() string {
@@ -471,7 +567,7 @@ type DeleteLinkResponse struct {
 
 func (x *DeleteLinkResponse) Reset() {
 	*x = DeleteLinkResponse{}
-	mi := &file_shortener_proto_msgTypes[8]
+	mi := &file_shortener_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -483,7 +579,7 @@ func (x *DeleteLinkResponse) String() string {
 func (*DeleteLinkResponse) ProtoMessage() {}
 
 func (x *DeleteLinkResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_shortener_proto_msgTypes[8]
+	mi := &file_shortener_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -496,7 +592,7 @@ func (x *DeleteLinkResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteLinkResponse.ProtoReflect.Descriptor instead.
 func (*DeleteLinkResponse) Descriptor() ([]byte, []int) {
-	return file_shortener_proto_rawDescGZIP(), []int{8}
+	return file_shortener_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *DeleteLinkResponse) GetMessage() string {
@@ -510,28 +606,31 @@ var File_shortener_proto protoreflect.FileDescriptor
 
 const file_shortener_proto_rawDesc = "" +
 	"\n" +
-	"\x0fshortener.proto\x12\tshortener\x1a\x1fgoogle/protobuf/timestamp.proto\"\x89\x02\n" +
+	"\x0fshortener.proto\x12\tshortener\x1a\x1fgoogle/protobuf/timestamp.proto\"\xd0\x01\n" +
 	"\x04Link\x12\x12\n" +
 	"\x04code\x18\x01 \x01(\tR\x04code\x12!\n" +
-	"\foriginal_url\x18\x02 \x01(\tR\voriginalUrl\x12&\n" +
-	"\fcustom_alias\x18\x03 \x01(\tH\x00R\vcustomAlias\x88\x01\x01\x129\n" +
+	"\foriginal_url\x18\x02 \x01(\tR\voriginalUrl\x129\n" +
 	"\n" +
-	"expires_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\x12\x1b\n" +
-	"\tis_active\x18\x05 \x01(\bR\bisActive\x129\n" +
+	"expires_at\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\x12\x1b\n" +
+	"\tis_active\x18\x04 \x01(\bR\bisActive\x129\n" +
 	"\n" +
-	"created_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAtB\x0f\n" +
-	"\r_custom_alias\"-\n" +
+	"created_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\"[\n" +
 	"\x12GetAllLinksRequest\x12\x17\n" +
-	"\auser_id\x18\x01 \x01(\tR\x06userId\"<\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x14\n" +
+	"\x05limit\x18\x02 \x01(\x05R\x05limit\x12\x16\n" +
+	"\x06offset\x18\x03 \x01(\x05R\x06offset\"<\n" +
 	"\x13GetAllLinksResponse\x12%\n" +
-	"\x05links\x18\x01 \x03(\v2\x0f.shortener.LinkR\x05links\"\xc3\x01\n" +
+	"\x05links\x18\x01 \x03(\v2\x0f.shortener.LinkR\x05links\"C\n" +
+	"\x14GetLinkByCodeRequest\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x12\n" +
+	"\x04code\x18\x02 \x01(\tR\x04code\"<\n" +
+	"\x15GetLinkByCodeResponse\x12#\n" +
+	"\x04link\x18\x01 \x01(\v2\x0f.shortener.LinkR\x04link\"\x8a\x01\n" +
 	"\x11CreateLinkRequest\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\x12!\n" +
-	"\foriginal_url\x18\x02 \x01(\tR\voriginalUrl\x12&\n" +
-	"\fcustom_alias\x18\x03 \x01(\tH\x00R\vcustomAlias\x88\x01\x01\x129\n" +
+	"\foriginal_url\x18\x02 \x01(\tR\voriginalUrl\x129\n" +
 	"\n" +
-	"expires_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAtB\x0f\n" +
-	"\r_custom_alias\"9\n" +
+	"expires_at\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\"9\n" +
 	"\x12CreateLinkResponse\x12#\n" +
 	"\x04link\x18\x01 \x01(\v2\x0f.shortener.LinkR\x04link\"}\n" +
 	"\x13UpdateExpiryRequest\x12\x17\n" +
@@ -545,9 +644,10 @@ const file_shortener_proto_rawDesc = "" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x12\n" +
 	"\x04code\x18\x02 \x01(\tR\x04code\".\n" +
 	"\x12DeleteLinkResponse\x12\x18\n" +
-	"\amessage\x18\x01 \x01(\tR\amessage2\xc7\x02\n" +
+	"\amessage\x18\x01 \x01(\tR\amessage2\x9b\x03\n" +
 	"\x10ShortenerService\x12L\n" +
-	"\vGetAllLinks\x12\x1d.shortener.GetAllLinksRequest\x1a\x1e.shortener.GetAllLinksResponse\x12I\n" +
+	"\vGetAllLinks\x12\x1d.shortener.GetAllLinksRequest\x1a\x1e.shortener.GetAllLinksResponse\x12R\n" +
+	"\rGetLinkByCode\x12\x1f.shortener.GetLinkByCodeRequest\x1a .shortener.GetLinkByCodeResponse\x12I\n" +
 	"\n" +
 	"CreateLink\x12\x1c.shortener.CreateLinkRequest\x1a\x1d.shortener.CreateLinkResponse\x12O\n" +
 	"\fUpdateExpiry\x12\x1e.shortener.UpdateExpiryRequest\x1a\x1f.shortener.UpdateExpiryResponse\x12I\n" +
@@ -566,39 +666,44 @@ func file_shortener_proto_rawDescGZIP() []byte {
 	return file_shortener_proto_rawDescData
 }
 
-var file_shortener_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_shortener_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
 var file_shortener_proto_goTypes = []any{
 	(*Link)(nil),                  // 0: shortener.Link
 	(*GetAllLinksRequest)(nil),    // 1: shortener.GetAllLinksRequest
 	(*GetAllLinksResponse)(nil),   // 2: shortener.GetAllLinksResponse
-	(*CreateLinkRequest)(nil),     // 3: shortener.CreateLinkRequest
-	(*CreateLinkResponse)(nil),    // 4: shortener.CreateLinkResponse
-	(*UpdateExpiryRequest)(nil),   // 5: shortener.UpdateExpiryRequest
-	(*UpdateExpiryResponse)(nil),  // 6: shortener.UpdateExpiryResponse
-	(*DeleteLinkRequest)(nil),     // 7: shortener.DeleteLinkRequest
-	(*DeleteLinkResponse)(nil),    // 8: shortener.DeleteLinkResponse
-	(*timestamppb.Timestamp)(nil), // 9: google.protobuf.Timestamp
+	(*GetLinkByCodeRequest)(nil),  // 3: shortener.GetLinkByCodeRequest
+	(*GetLinkByCodeResponse)(nil), // 4: shortener.GetLinkByCodeResponse
+	(*CreateLinkRequest)(nil),     // 5: shortener.CreateLinkRequest
+	(*CreateLinkResponse)(nil),    // 6: shortener.CreateLinkResponse
+	(*UpdateExpiryRequest)(nil),   // 7: shortener.UpdateExpiryRequest
+	(*UpdateExpiryResponse)(nil),  // 8: shortener.UpdateExpiryResponse
+	(*DeleteLinkRequest)(nil),     // 9: shortener.DeleteLinkRequest
+	(*DeleteLinkResponse)(nil),    // 10: shortener.DeleteLinkResponse
+	(*timestamppb.Timestamp)(nil), // 11: google.protobuf.Timestamp
 }
 var file_shortener_proto_depIdxs = []int32{
-	9,  // 0: shortener.Link.expires_at:type_name -> google.protobuf.Timestamp
-	9,  // 1: shortener.Link.created_at:type_name -> google.protobuf.Timestamp
+	11, // 0: shortener.Link.expires_at:type_name -> google.protobuf.Timestamp
+	11, // 1: shortener.Link.created_at:type_name -> google.protobuf.Timestamp
 	0,  // 2: shortener.GetAllLinksResponse.links:type_name -> shortener.Link
-	9,  // 3: shortener.CreateLinkRequest.expires_at:type_name -> google.protobuf.Timestamp
-	0,  // 4: shortener.CreateLinkResponse.link:type_name -> shortener.Link
-	9,  // 5: shortener.UpdateExpiryRequest.expires_at:type_name -> google.protobuf.Timestamp
-	1,  // 6: shortener.ShortenerService.GetAllLinks:input_type -> shortener.GetAllLinksRequest
-	3,  // 7: shortener.ShortenerService.CreateLink:input_type -> shortener.CreateLinkRequest
-	5,  // 8: shortener.ShortenerService.UpdateExpiry:input_type -> shortener.UpdateExpiryRequest
-	7,  // 9: shortener.ShortenerService.DeleteLink:input_type -> shortener.DeleteLinkRequest
-	2,  // 10: shortener.ShortenerService.GetAllLinks:output_type -> shortener.GetAllLinksResponse
-	4,  // 11: shortener.ShortenerService.CreateLink:output_type -> shortener.CreateLinkResponse
-	6,  // 12: shortener.ShortenerService.UpdateExpiry:output_type -> shortener.UpdateExpiryResponse
-	8,  // 13: shortener.ShortenerService.DeleteLink:output_type -> shortener.DeleteLinkResponse
-	10, // [10:14] is the sub-list for method output_type
-	6,  // [6:10] is the sub-list for method input_type
-	6,  // [6:6] is the sub-list for extension type_name
-	6,  // [6:6] is the sub-list for extension extendee
-	0,  // [0:6] is the sub-list for field type_name
+	0,  // 3: shortener.GetLinkByCodeResponse.link:type_name -> shortener.Link
+	11, // 4: shortener.CreateLinkRequest.expires_at:type_name -> google.protobuf.Timestamp
+	0,  // 5: shortener.CreateLinkResponse.link:type_name -> shortener.Link
+	11, // 6: shortener.UpdateExpiryRequest.expires_at:type_name -> google.protobuf.Timestamp
+	1,  // 7: shortener.ShortenerService.GetAllLinks:input_type -> shortener.GetAllLinksRequest
+	3,  // 8: shortener.ShortenerService.GetLinkByCode:input_type -> shortener.GetLinkByCodeRequest
+	5,  // 9: shortener.ShortenerService.CreateLink:input_type -> shortener.CreateLinkRequest
+	7,  // 10: shortener.ShortenerService.UpdateExpiry:input_type -> shortener.UpdateExpiryRequest
+	9,  // 11: shortener.ShortenerService.DeleteLink:input_type -> shortener.DeleteLinkRequest
+	2,  // 12: shortener.ShortenerService.GetAllLinks:output_type -> shortener.GetAllLinksResponse
+	4,  // 13: shortener.ShortenerService.GetLinkByCode:output_type -> shortener.GetLinkByCodeResponse
+	6,  // 14: shortener.ShortenerService.CreateLink:output_type -> shortener.CreateLinkResponse
+	8,  // 15: shortener.ShortenerService.UpdateExpiry:output_type -> shortener.UpdateExpiryResponse
+	10, // 16: shortener.ShortenerService.DeleteLink:output_type -> shortener.DeleteLinkResponse
+	12, // [12:17] is the sub-list for method output_type
+	7,  // [7:12] is the sub-list for method input_type
+	7,  // [7:7] is the sub-list for extension type_name
+	7,  // [7:7] is the sub-list for extension extendee
+	0,  // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_shortener_proto_init() }
@@ -606,15 +711,13 @@ func file_shortener_proto_init() {
 	if File_shortener_proto != nil {
 		return
 	}
-	file_shortener_proto_msgTypes[0].OneofWrappers = []any{}
-	file_shortener_proto_msgTypes[3].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_shortener_proto_rawDesc), len(file_shortener_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   9,
+			NumMessages:   11,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -7,9 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func NewRouter(
-	linkHandler *link.Handler,
-) *gin.Engine {
+func NewRouter(linkHandler *link.Handler) *gin.Engine {
 	router := gin.New()
 	router.Use(
 		gin.Recovery(),

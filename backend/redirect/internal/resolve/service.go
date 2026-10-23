@@ -3,13 +3,19 @@ package resolve
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
+	sqlcgen "aziz.dev/redirect/internal/postgres/sqlc"
+	"github.com/jackc/pgx/v5"
 	"github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
 )
 
-var ErrLinkInactive = errors.New("link is not active or expired")
+var (
+	ErrNotFound = errors.New("link not found")
+	ErrLinkInactive = errors.New("link is not active or expired")
+)
 
 type RedisClient interface {
 	Get(ctx context.Context, key string) *redis.StringCmd
@@ -21,68 +27,70 @@ type Service interface {
 }
 
 type service struct {
-	repo           Repository
-	cache          RedisClient
+	querier sqlcgen.Querier
+	cache RedisClient
 }
 
-func NewService(repo Repository, cache RedisClient) Service {
+func NewService(querier sqlcgen.Querier, cache RedisClient) Service {
 	return &service{
-		repo:          repo,
-		cache:         cache,
+		querier: querier,
+		cache:   cache,
 	}
 }
 
 func (s *service) ResolveCode(ctx context.Context, code string) (*Dto, error) {
-	logrus.WithField("code", code).Info("Resolving code")
+	log := logrus.WithField("code", code)
+	log.Info("Resolving code")
 
 	// L1: Redis cache
 	url, err := s.cache.Get(ctx, code).Result()
-
-	if err == nil && url != "" {
-		logrus.WithField("code", code).Info("Cache hit")
+	switch {
+	case err == nil && url != "":
+		log.Info("Cache hit")
 		return &Dto{Code: code, OriginalURL: url}, nil
-	}
-
-	if err == redis.Nil || url == "" {
-		logrus.WithField("code", code).Info("Cache miss")
-	} else {
-		logrus.WithError(err).WithField("code", code).Warn("Cache lookup error")
+	case errors.Is(err, redis.Nil) || (err == nil && url == ""):
+		log.Info("Cache miss")
+	default:
+		log.WithError(err).Warn("Cache lookup error")
 	}
 
 	// L2: database
-	link, err := s.repo.Find(ctx, code)
-
+	link, err := s.querier.FindByCode(ctx, code)
 	if err != nil {
-		if errors.Is(err, ErrNotFound) {
-			logrus.WithField("code", code).Warn("Code not found in database")
-		} else {
-			logrus.WithError(err).WithField("code", code).Error("Database lookup error")
+		if errors.Is(err, pgx.ErrNoRows) {
+			log.Warn("Code not found in database")
+			return nil, ErrNotFound // map it, so handlers don't depend on pgx
 		}
-		return nil, err
+		log.WithError(err).Error("Database lookup error")
+		return nil, fmt.Errorf("find by code: %w", err)
 	}
 
 	// Validate: must be active and not past its expiry.
-	// err: link.ExpiresAt.Before undefined (type **time.Time has no field or method Before)compilerMissingFieldOrMethod
-	if !link.IsActive || (link.ExpiresAt != nil && link.ExpiresAt.Before(time.Now())) {
-		logrus.WithField("code", code).Warn("Link is inactive or expired")
+	expiresAt := expiryInstant(link.ExpiresAt)
+	ttl := time.Until(expiresAt)
+
+	if !link.IsActive || ttl <= 0 {
+		log.Warn("Link is inactive or expired")
 		return nil, ErrLinkInactive
 	}
 
-	// Write-back to cache with a TTL that matches the link's remaining lifetime.
-	if link.ExpiresAt != nil {
-		// err: cannot use *link.ExpiresAt (variable of type *time.Time) as time.Time value in argument to time.UntilcompilerIncompatibleAssign
-		if ttl := time.Until(*link.ExpiresAt); ttl > 0 {
-			// Best-effort — a cache write failure must never break the redirect.
-			if err := s.cache.Set(ctx, code, link.OriginalUrl, ttl).Err(); err != nil {
-				logrus.WithError(err).WithField("code", code).Warn("Failed to write to cache")
-			} else {
-				logrus.WithField("code", code).Info("Successfully wrote to cache")
-			}
-		}
+	// Write-back to cache; TTL matches the link's remaining lifetime.
+	// Best-effort: a cache failure must never break the redirect.
+	if err := s.cache.Set(ctx, code, link.OriginalUrl, ttl).Err(); err != nil {
+		log.WithError(err).Warn("Failed to write to cache")
+	} else {
+		log.Info("Successfully wrote to cache")
 	}
 
 	return &Dto{
 		Code:        link.Code,
 		OriginalURL: link.OriginalUrl,
 	}, nil
+}
+
+// expiryInstant returns the first moment the link is no longer valid:
+// midnight UTC at the start of the day AFTER the stored expiry date.
+func expiryInstant(d time.Time) time.Time {
+	y, m, day := d.UTC().Date()
+	return time.Date(y, m, day+1, 0, 0, 0, 0, time.UTC)
 }

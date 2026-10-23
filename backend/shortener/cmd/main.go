@@ -7,6 +7,7 @@ import (
 	"aziz.dev/shortener/internal/configloader"
 	"aziz.dev/shortener/internal/link"
 	"aziz.dev/shortener/internal/postgres"
+	sqlcgen "aziz.dev/shortener/internal/postgres/sqlc"
 	"aziz.dev/shortener/internal/server"
 	"github.com/sirupsen/logrus"
 )
@@ -29,8 +30,8 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to connect to PostgreSQL")
 	}
 
-	linkRepository := link.NewRepository(postgresDB)
-	linkService := link.NewService(linkRepository)
+	linkQuerier := sqlcgen.New(postgresDB)
+	linkService := link.NewService(linkQuerier)
 	linkHandler := link.NewHandler(linkService)
 
 	router := server.NewRouter(linkHandler)

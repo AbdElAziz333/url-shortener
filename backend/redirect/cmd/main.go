@@ -6,6 +6,7 @@ import (
 
 	"aziz.dev/redirect/internal/configloader"
 	"aziz.dev/redirect/internal/postgres"
+	sqlcgen "aziz.dev/redirect/internal/postgres/sqlc"
 	"aziz.dev/redirect/internal/redis"
 	"aziz.dev/redirect/internal/resolve"
 	"aziz.dev/redirect/internal/server"
@@ -35,17 +36,11 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to initialize Redis client")
 	}
 
-	resolveRepository := resolve.NewRepository(postgresDB)
-	resolveService := resolve.NewService(resolveRepository, redisClient)
+	resolveQuerier := sqlcgen.New(postgresDB)
+	resolveService := resolve.NewService(resolveQuerier, redisClient)
 	resolveHandler := resolve.NewHandler(resolveService)
 
 	router := server.NewRouter(resolveHandler)
-
-	go func() {
-		if err := server.StartGRPC(resolveService, config.Service.GRPCPort); err != nil {
-			logrus.WithError(err).Fatal("Failed to start gRPC server")
-		}
-	}()
 
 	logrus.WithField("port", config.Service.Port).Info("Starting server")
 	router.Run(":" + config.Service.Port)

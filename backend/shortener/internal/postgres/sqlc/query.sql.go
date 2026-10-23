@@ -13,53 +13,31 @@ import (
 )
 
 const createLink = `-- name: CreateLink :one
-
-INSERT INTO link (
-    user_id, code, original_url, custom_alias, expires_at, is_active, created_at
-) VALUES (
-    $1, $2, $3, $4, $5, $6, $7
-)
-RETURNING id, user_id, code, original_url, custom_alias, expires_at, is_active, created_at
+INSERT INTO link (user_id, code, original_url, expires_at)
+VALUES ($1, $2, $3, $4)
+RETURNING id, user_id, code, original_url, expires_at, is_active, created_at
 `
 
 type CreateLinkParams struct {
 	UserID      uuid.UUID
 	Code        string
 	OriginalUrl string
-	CustomAlias *string
-	ExpiresAt   *time.Time
-	IsActive    bool
-	CreatedAt   time.Time
+	ExpiresAt   time.Time
 }
 
-type CreateLinkRow struct {
-	ID          uuid.UUID
-	UserID      uuid.UUID
-	Code        string
-	OriginalUrl string
-	CustomAlias *string
-	ExpiresAt   *time.Time
-	IsActive    bool
-	CreatedAt   time.Time
-}
-
-func (q *Queries) CreateLink(ctx context.Context, arg CreateLinkParams) (CreateLinkRow, error) {
+func (q *Queries) CreateLink(ctx context.Context, arg CreateLinkParams) (Link, error) {
 	row := q.db.QueryRow(ctx, createLink,
 		arg.UserID,
 		arg.Code,
 		arg.OriginalUrl,
-		arg.CustomAlias,
 		arg.ExpiresAt,
-		arg.IsActive,
-		arg.CreatedAt,
 	)
-	var i CreateLinkRow
+	var i Link
 	err := row.Scan(
 		&i.ID,
 		&i.UserID,
 		&i.Code,
 		&i.OriginalUrl,
-		&i.CustomAlias,
 		&i.ExpiresAt,
 		&i.IsActive,
 		&i.CreatedAt,
@@ -67,35 +45,88 @@ func (q *Queries) CreateLink(ctx context.Context, arg CreateLinkParams) (CreateL
 	return i, err
 }
 
-const findAllByUserID = `-- name: FindAllByUserID :many
+const deactivateLink = `-- name: DeactivateLink :execrows
+UPDATE link SET is_active = false
+WHERE code = $1 AND user_id = $2 AND is_active
+`
 
-SELECT id, code, original_url, user_id, custom_alias, expires_at, is_active, created_at FROM link 
-WHERE user_id = $1 AND is_active = true 
-ORDER BY created_at DESC
+type DeactivateLinkParams struct {
+	Code   string
+	UserID uuid.UUID
+}
+
+func (q *Queries) DeactivateLink(ctx context.Context, arg DeactivateLinkParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deactivateLink, arg.Code, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const getActiveLinkByCode = `-- name: GetActiveLinkByCode :one
+SELECT original_url FROM link
+WHERE code = $1 AND is_active AND (expires_at IS NULL OR expires_at > now())
+`
+
+func (q *Queries) GetActiveLinkByCode(ctx context.Context, code string) (string, error) {
+	row := q.db.QueryRow(ctx, getActiveLinkByCode, code)
+	var original_url string
+	err := row.Scan(&original_url)
+	return original_url, err
+}
+
+const getLinkByCode = `-- name: GetLinkByCode :one
+SELECT id, user_id, code, original_url, expires_at, is_active, created_at FROM link
+WHERE code = $1 AND user_id = $2 AND is_active
+`
+
+type GetLinkByCodeParams struct {
+	Code   string
+	UserID uuid.UUID
+}
+
+func (q *Queries) GetLinkByCode(ctx context.Context, arg GetLinkByCodeParams) (Link, error) {
+	row := q.db.QueryRow(ctx, getLinkByCode, arg.Code, arg.UserID)
+	var i Link
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Code,
+		&i.OriginalUrl,
+		&i.ExpiresAt,
+		&i.IsActive,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const listLinksByUser = `-- name: ListLinksByUser :many
+SELECT id, user_id, code, original_url, expires_at, is_active, created_at FROM link
+WHERE user_id = $1 AND is_active
+ORDER BY created_at DESC, id
 LIMIT $2 OFFSET $3
 `
 
-type FindAllByUserIDParams struct {
+type ListLinksByUserParams struct {
 	UserID uuid.UUID
 	Limit  int32
 	Offset int32
 }
 
-func (q *Queries) FindAllByUserID(ctx context.Context, arg FindAllByUserIDParams) ([]Link, error) {
-	rows, err := q.db.Query(ctx, findAllByUserID, arg.UserID, arg.Limit, arg.Offset)
+func (q *Queries) ListLinksByUser(ctx context.Context, arg ListLinksByUserParams) ([]Link, error) {
+	rows, err := q.db.Query(ctx, listLinksByUser, arg.UserID, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Link
+	items := []Link{}
 	for rows.Next() {
 		var i Link
 		if err := rows.Scan(
 			&i.ID,
+			&i.UserID,
 			&i.Code,
 			&i.OriginalUrl,
-			&i.UserID,
-			&i.CustomAlias,
 			&i.ExpiresAt,
 			&i.IsActive,
 			&i.CreatedAt,
@@ -110,66 +141,29 @@ func (q *Queries) FindAllByUserID(ctx context.Context, arg FindAllByUserIDParams
 	return items, nil
 }
 
-const findByCodeAndUserID = `-- name: FindByCodeAndUserID :one
-
-SELECT id, code, original_url, user_id, custom_alias, expires_at, is_active, created_at FROM link 
-WHERE code = $1 AND user_id = $2 AND is_active = true
-LIMIT 1
+const updateLinkExpiry = `-- name: UpdateLinkExpiry :one
+UPDATE link SET expires_at = $3
+WHERE code = $1 AND user_id = $2 AND is_active
+RETURNING id, user_id, code, original_url, expires_at, is_active, created_at
 `
 
-type FindByCodeAndUserIDParams struct {
-	Code   string
-	UserID uuid.UUID
+type UpdateLinkExpiryParams struct {
+	Code      string
+	UserID    uuid.UUID
+	ExpiresAt time.Time
 }
 
-func (q *Queries) FindByCodeAndUserID(ctx context.Context, arg FindByCodeAndUserIDParams) (Link, error) {
-	row := q.db.QueryRow(ctx, findByCodeAndUserID, arg.Code, arg.UserID)
+func (q *Queries) UpdateLinkExpiry(ctx context.Context, arg UpdateLinkExpiryParams) (Link, error) {
+	row := q.db.QueryRow(ctx, updateLinkExpiry, arg.Code, arg.UserID, arg.ExpiresAt)
 	var i Link
 	err := row.Scan(
 		&i.ID,
+		&i.UserID,
 		&i.Code,
 		&i.OriginalUrl,
-		&i.UserID,
-		&i.CustomAlias,
 		&i.ExpiresAt,
 		&i.IsActive,
 		&i.CreatedAt,
 	)
 	return i, err
-}
-
-const updateLink = `-- name: UpdateLink :execrows
-
-UPDATE link
-SET 
-    code = $2,
-    original_url = $3,
-    custom_alias = $4,
-    expires_at = $5,
-    is_active = $6
-WHERE id = $1
-`
-
-type UpdateLinkParams struct {
-	ID          uuid.UUID
-	Code        string
-	OriginalUrl string
-	CustomAlias *string
-	ExpiresAt   *time.Time
-	IsActive    bool
-}
-
-func (q *Queries) UpdateLink(ctx context.Context, arg UpdateLinkParams) (int64, error) {
-	result, err := q.db.Exec(ctx, updateLink,
-		arg.ID,
-		arg.Code,
-		arg.OriginalUrl,
-		arg.CustomAlias,
-		arg.ExpiresAt,
-		arg.IsActive,
-	)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
 }

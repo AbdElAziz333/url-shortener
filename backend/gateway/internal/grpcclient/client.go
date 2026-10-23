@@ -1,9 +1,9 @@
 package grpcclient
 
 import (
+	"errors"
 	"fmt"
 
-	redirectpb "aziz.dev/gateway/internal/pb/redirect"
 	shortenerpb "aziz.dev/gateway/internal/pb/shortener"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -11,43 +11,29 @@ import (
 
 type Clients struct {
 	Shortener shortenerpb.ShortenerServiceClient
-	Redirect  redirectpb.RedirectServiceClient
 	conns     []*grpc.ClientConn
 }
 
-func NewClients(shortenerAddr, redirectAddr string) (*Clients, error) {
-	shortenerConn, err := grpc.NewClient(
-		shortenerAddr,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithUnaryInterceptor(circuitBreakerUnaryInterceptor("shortener")),
-	)
+func NewClients(shortenerAddr string) (*Clients, error) {
+	shortenerConn, err := dial(shortenerAddr)
 	if err != nil {
 		return nil, fmt.Errorf("dial shortener: %w", err)
 	}
 
-	redirectConn, err := grpc.NewClient(
-		redirectAddr,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithUnaryInterceptor(circuitBreakerUnaryInterceptor("redirect")),
-	)
-	if err != nil {
-		_ = shortenerConn.Close()
-		return nil, fmt.Errorf("dial redirect: %w", err)
-	}
-
 	return &Clients{
 		Shortener: shortenerpb.NewShortenerServiceClient(shortenerConn),
-		Redirect:  redirectpb.NewRedirectServiceClient(redirectConn),
-		conns:     []*grpc.ClientConn{shortenerConn, redirectConn},
+		conns:     []*grpc.ClientConn{shortenerConn},
 	}, nil
 }
 
 func (c *Clients) Close() error {
-	var firstErr error
+	var errs []error
 	for _, conn := range c.conns {
-		if err := conn.Close(); err != nil && firstErr == nil {
-			firstErr = err
-		}
+		errs = append(errs, conn.Close())
 	}
-	return firstErr
+	return errors.Join(errs...)
+}
+
+func dial(addr string) (*grpc.ClientConn, error) {
+	return grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 }

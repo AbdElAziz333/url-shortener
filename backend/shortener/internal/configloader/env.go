@@ -10,28 +10,15 @@ import (
 )
 
 func LoadFromEnv() (*config.AppConfig, error) {
-	appEnv := os.Getenv("APP_ENV")
-	if appEnv == "local" || appEnv == "" {
-		_, filename, _, ok := runtime.Caller(0)
-		if ok {
-			dir := filepath.Dir(filename)
-			envPath := filepath.Join(dir, "..", "..", ".env")
-			_ = godotenv.Load(envPath)
-		} else {
-			_ = godotenv.Load("shortener/.env")
-		}
-	}
-
-	grpcPort := os.Getenv("GRPC_PORT")
-	if grpcPort == "" {
-		grpcPort = "50051"
+	if env := os.Getenv("APP_ENV"); env == "" || env == "local" {
+		loadDotEnv()
 	}
 
 	return &config.AppConfig{
 		Service: config.ServiceConfig{
 			Name:     os.Getenv("SERVICE_NAME"),
 			Port:     os.Getenv("SERVICE_PORT"),
-			GRPCPort: grpcPort,
+			GRPCPort: os.Getenv("GRPC_PORT"),
 		},
 		Postgres: config.PostgresConfig{
 			Host:     os.Getenv("POSTGRES_HOST"),
@@ -40,4 +27,10 @@ func LoadFromEnv() (*config.AppConfig, error) {
 			DBName:   os.Getenv("POSTGRES_DB"),
 		},
 	}, nil
+}
+
+func loadDotEnv() {
+	if _, file, _, ok := runtime.Caller(0); ok {
+		_ = godotenv.Load(filepath.Join(filepath.Dir(file), "..", "..", ".env"))
+	}
 }

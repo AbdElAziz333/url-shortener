@@ -25,8 +25,7 @@ services:
       # REDIS_ADDR: redis:6379
       # REDIS_USER: app
       REDIS_PASSWORD: ${REDIS_PASSWORD}
-      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
-      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      JWT_SECRET: ${JWT_SECRET}
       JWT_ACCESS_EXPIRY: ${JWT_ACCESS_EXPIRY}
       JWT_REFRESH_EXPIRY: ${JWT_REFRESH_EXPIRY}
     depends_on:
@@ -86,7 +85,6 @@ services:
       APP_ENV: docker
       APP_NAME: redirect
       APP_PORT: 8082
-      GRPC_PORT: 50052
       POSTGRES_HOST: postgres
       POSTGRES_USER: aziz
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}

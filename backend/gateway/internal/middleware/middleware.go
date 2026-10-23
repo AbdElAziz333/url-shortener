@@ -4,33 +4,33 @@ import (
 	"net/http"
 	"strings"
 
-	"aziz.dev/gateway/internal/auth"
 	"aziz.dev/gateway/internal/config"
+	"aziz.dev/gateway/internal/security"
 	"github.com/gin-gonic/gin"
 )
+
+const UserIDKey = "userID"
 
 func AccessTokenMiddleware(cfg *config.JWTConfig) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		token := strings.TrimSpace(c.GetHeader("Authorization"))
-		if token == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-			c.Abort()
-			return
-		}
 
-		// Allow both "Bearer <token>" and raw token values.
+		// Accept both "Bearer <token>" and a raw token.
 		if len(token) > 7 && strings.EqualFold(token[:7], "Bearer ") {
 			token = strings.TrimSpace(token[7:])
 		}
-
-		claims, valid := auth.ValidateAccessToken(cfg, token)
-		if !valid {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized validating the token"})
-			c.Abort()
+		if token == "" {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 			return
 		}
-		
-		c.Set("userID", claims.UserID.String())
+
+		claims, err := security.ValidateToken(cfg, token)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+			return
+		}
+
+		c.Set(UserIDKey, claims.UserID.String())
 		c.Next()
 	}
 }

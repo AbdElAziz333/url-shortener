@@ -13,7 +13,6 @@ type ServiceConfig struct {
 	Name string
 	Port string
 	ShortenerServiceURL string
-	RedirectServiceURL string
 }
 
 type PostgresConfig struct {
@@ -30,8 +29,7 @@ type RedisConfig struct {
 }
 
 type JWTConfig struct {
-	AccessSecret []byte
-	RefreshSecret []byte
+	Secret []byte
 	AccessExpiry time.Duration
 	RefreshExpiry time.Duration
 }
