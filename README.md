@@ -4,10 +4,10 @@ A distributed url shortener written in Go and gRPC for high performance.
 
 # Project Structure
 
-backend -> backend files (spring boot)
-frontend -> frontend files (reactjs)
+backend -> backend files (Go)
+frontend -> frontend files (ReactJS)
 docs -> diagrams (ERD, C4, sequence)
-deploy -> gitops files (k8s, helm, fluxcd)
+deploy -> gitops files (k8s, helm, argocd)
 infra -> infrastructure files (terraform, ansible)
 
 ## How To Run

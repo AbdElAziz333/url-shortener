@@ -1,11 +1,11 @@
 services:
   gateway:
-    image: abdelaziz333/gateway:0.0.7
+    image: abdelaziz333/url-gateway:0.0.6
     ports:
-      - "8080:8080"
+      - "${GATEWAY_PORT}:${GATEWAY_PORT}"
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ./backend/gateway
+      dockerfile: ../Dockerfile
       args:
         APP_NAME: gateway
         APP_PORT: ${GATEWAY_PORT}
@@ -15,15 +15,14 @@ services:
     environment:
       APP_ENV: docker
       APP_NAME: gateway
-      APP_PORT: 8080
+      APP_PORT: ${GATEWAY_PORT}
       SHORTENER_SERVICE_URL: shortener:50051
       REDIRECT_SERVICE_URL: redirect:50052
       POSTGRES_HOST: postgres
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: gateway
-      # REDIS_ADDR: redis:6379
-      # REDIS_USER: app
+      REDIS_ADDR: redis:6379
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
       JWT_ACCESS_EXPIRY: ${JWT_ACCESS_EXPIRY}
@@ -38,13 +37,13 @@ services:
       - app
   
   shortener:
-    image: abdelaziz333/shortener:0.0.7
+    image: abdelaziz333/url-shortener:0.0.6
     ports:
-      - "8081:8081"
+      - "${SHORTENER_PORT}:${SHORTENER_PORT}"
       - "50051:50051"
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ./backend/shortener
+      dockerfile: ../Dockerfile
       args:
         APP_NAME: shortener
         APP_PORT: ${SHORTENER_PORT}
@@ -54,7 +53,7 @@ services:
     environment:
       APP_ENV: docker
       APP_NAME: shortener
-      APP_PORT: 8081
+      APP_PORT: ${SHORTENER_PORT}
       GRPC_PORT: 50051
       POSTGRES_HOST: postgres
       POSTGRES_USER: ${POSTGRES_USER}
@@ -68,13 +67,13 @@ services:
       - app
 
   redirect:
-    image: abdelaziz333/redirect:0.0.7
+    image: abdelaziz333/url-redirect:0.0.6
     ports:
-      - "8082:8082"
+      - "${REDIRECT_PORT}:${REDIRECT_PORT}"
       - "50052:50052"
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ./backend/redirect
+      dockerfile: ../Dockerfile
       args:
         APP_NAME: redirect
         APP_PORT: ${REDIRECT_PORT}
@@ -89,8 +88,7 @@ services:
       POSTGRES_USER: aziz
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: shortener
-      # REDIS_ADDR: redis:6379
-      # REDIS_USER: app
+      REDIS_ADDR: redis:6379
       REDIS_PASSWORD: ${REDIS_PASSWORD}
     depends_on:
       postgres:
@@ -100,6 +98,23 @@ services:
     profiles:
       - all
       - app
+  
+  frontend:
+    image: abdelaziz333/url-frontend:0.0.1
+    ports:
+      - "5173:80"
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_GATEWAY_URL: http://localhost:8080
+    restart: unless-stopped
+    networks:
+      - url-shortener-net
+    profiles:
+      - all
+      - app
+      - frontend
       
   postgres:
     image: postgres:16-alpine
@@ -107,7 +122,7 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./infra/postgres/init-databases.sql:/docker-entrypoint-initdb.d/init-databases.sql
+      - ./backend/migrations/init-databases.sql:/docker-entrypoint-initdb.d/init-databases.sql
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
