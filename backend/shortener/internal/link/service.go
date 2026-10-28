@@ -27,11 +27,19 @@ const (
 	charset         = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 )
 
+type Link struct {
+	Code        string
+	OriginalURL string
+	ExpiresAt   time.Time
+	IsActive    bool
+	CreatedAt   time.Time
+}
+
 type Service interface {
-	GetAll(ctx context.Context, userID uuid.UUID, limit, offset int32) ([]Dto, error)
-	Get(ctx context.Context, userID uuid.UUID, code string) (*Dto, error)
-	Create(ctx context.Context, userID uuid.UUID, req CreateRequest) (*Dto, error)
-	UpdateExpiry(ctx context.Context, userID uuid.UUID, code string, req UpdateExpiryRequest) (*Dto, error)
+	GetAll(ctx context.Context, userID uuid.UUID, limit, offset int32) ([]Link, error)
+	Get(ctx context.Context, userID uuid.UUID, code string) (*Link, error)
+	Create(ctx context.Context, userID uuid.UUID, originalURL string, expiresAt time.Time) (*Link, error)
+	UpdateExpiry(ctx context.Context, userID uuid.UUID, code string, expiresAt time.Time) (*Link, error)
 	Delete(ctx context.Context, userID uuid.UUID, code string) error
 }
 
@@ -45,7 +53,7 @@ func NewService(q sqlcgen.Querier) Service {
 	}
 }
 
-func (s *service) GetAll(ctx context.Context, userID uuid.UUID, limit, offset int32) ([]Dto, error) {
+func (s *service) GetAll(ctx context.Context, userID uuid.UUID, limit, offset int32) ([]Link, error) {
 	links, err := s.q.ListLinksByUser(ctx, sqlcgen.ListLinksByUserParams{
 		UserID: userID,
 		Limit: limit,
@@ -55,31 +63,27 @@ func (s *service) GetAll(ctx context.Context, userID uuid.UUID, limit, offset in
 		return nil, fmt.Errorf("list links: %w", err)
 	}
 
-	dtos := make([]Dto, 0, len(links)) // never nil -> JSON []
+	dtos := make([]Link, 0, len(links)) // never nil -> JSON []
 	for _, l := range links {
-		dtos = append(dtos, toDto(l))
+		dtos = append(dtos, toLink(l))
 	}
 	return dtos, nil
 }
 
-func (s *service) Get(ctx context.Context, userID uuid.UUID, code string) (*Dto, error) {
+func (s *service) Get(ctx context.Context, userID uuid.UUID, code string) (*Link, error) {
 	row, err := s.q.GetLinkByCode(ctx, sqlcgen.GetLinkByCodeParams{Code: code, UserID: userID})
 
 	if err != nil {
 		return nil, wrapErr("get link", err)
 	}
 
-	return ptr(toDto(row)), nil
+	return ptr(toLink(row)), nil
 }
 
-func (s *service) Create(ctx context.Context, userID uuid.UUID, req CreateRequest) (*Dto, error) {
-	if req.ExpiresAt == nil {
-		return nil, ErrInvalidExpiry // or apply a default, e.g. now + 30 days
-	}
-
-	expiresAt, err := normalizeExpiry(*req.ExpiresAt)
-	if err !=  nil {
-		return nil, fmt.Errorf("normalizing expiry: %w", err)
+func (s *service) Create(ctx context.Context, userID uuid.UUID, originalURL string, expiresAt time.Time) (*Link, error) {
+	expiry, err := normalizeExpiry(expiresAt)
+	if err != nil {
+		return nil, err // keeps the message clean for the client
 	}
 
 	for i := 0; i < maxCodeAttempts; i++ {
@@ -91,45 +95,34 @@ func (s *service) Create(ctx context.Context, userID uuid.UUID, req CreateReques
 		row, err := s.q.CreateLink(ctx, sqlcgen.CreateLinkParams{
 			UserID:      userID,
 			Code:        code,
-			OriginalUrl: req.OriginalURL,
-			ExpiresAt:   expiresAt,
+			OriginalUrl: originalURL,
+			ExpiresAt:   expiry,
 		})
-		
 		if err == nil {
-			return ptr(toDto(row)), nil
+			return ptr(toLink(row)), nil
 		}
-
 		if !isUniqueViolation(err) {
 			return nil, fmt.Errorf("create link: %w", err)
 		}
-
-		// code collision: try again with a new code
 	}
-
 	return nil, ErrCodeGen
 }
 
-func (s *service) UpdateExpiry(ctx context.Context, userID uuid.UUID, code string, req UpdateExpiryRequest) (*Dto, error) {
-	if req.ExpiresAt == nil {
-		return nil, ErrInvalidExpiry // or apply a default, e.g. now + 30 days
-	}
-
-	expiresAt, err := normalizeExpiry(*req.ExpiresAt)
-	if err !=  nil {
-		return nil, fmt.Errorf("normalizing expiry: %w", err)
+func (s *service) UpdateExpiry(ctx context.Context, userID uuid.UUID, code string, expiresAt time.Time) (*Link, error) {
+	expiry, err := normalizeExpiry(expiresAt)
+	if err != nil {
+		return nil, err
 	}
 
 	row, err := s.q.UpdateLinkExpiry(ctx, sqlcgen.UpdateLinkExpiryParams{
 		Code:      code,
 		UserID:    userID,
-		ExpiresAt: expiresAt,
+		ExpiresAt: expiry,
 	})
-
 	if err != nil {
 		return nil, wrapErr("update expiry", err)
 	}
-
-	return ptr(toDto(row)), nil
+	return ptr(toLink(row)), nil
 }
 
 func (s *service) Delete(ctx context.Context, userID uuid.UUID, code string) error {
@@ -188,4 +181,8 @@ func generateRandomCode(length int) (string, error) {
 
 func ptr[T any](v T) *T {
 	return &v
+}
+
+func toLink(l sqlcgen.Link) Link {
+	return Link{Code: l.Code, OriginalURL: l.OriginalUrl, ExpiresAt: l.ExpiresAt, IsActive: l.IsActive, CreatedAt: l.CreatedAt}
 }

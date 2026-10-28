@@ -4,6 +4,7 @@ package shortener;
 option go_package = "aziz.dev/shortener/internal/pb";
 
 import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
 
 message Link {
   string code = 1;
@@ -13,22 +14,22 @@ message Link {
   google.protobuf.Timestamp created_at = 5;
 }
 
-message GetAllLinksRequest {
+message ListLinksRequest {
   string user_id = 1;
   int32 limit = 2;
   int32 offset = 3;
 }
 
-message GetAllLinksResponse {
+message ListLinksResponse {
   repeated Link links = 1;
 }
 
-message GetLinkByCodeRequest {
+message GetLinkRequest {
   string user_id = 1;
   string code = 2;
 }
 
-message GetLinkByCodeResponse {
+message GetLinkResponse {
   Link link = 1;
 }
 
@@ -42,14 +43,10 @@ message CreateLinkResponse {
   Link link = 1;
 }
 
-message UpdateExpiryRequest {
+message UpdateLinkExpiryRequest {
   string user_id = 1;
   string code = 2;
   google.protobuf.Timestamp expires_at = 3;
-}
-
-message UpdateExpiryResponse {
-  string message = 1;
 }
 
 message DeleteLinkRequest {
@@ -57,14 +54,10 @@ message DeleteLinkRequest {
   string code = 2;
 }
 
-message DeleteLinkResponse {
-  string message = 1;
-}
-
-service ShortenerService {
-  rpc GetAllLinks(GetAllLinksRequest) returns (GetAllLinksResponse);
-  rpc GetLinkByCode(GetLinkByCodeRequest) returns (GetLinkByCodeResponse);
+service LinkService {
+  rpc ListLinks(ListLinksRequest) returns (ListLinksResponse);
+  rpc GetLink(GetLinkRequest) returns (GetLinkResponse);
   rpc CreateLink(CreateLinkRequest) returns (CreateLinkResponse);
-  rpc UpdateExpiry(UpdateExpiryRequest) returns (UpdateExpiryResponse);
-  rpc DeleteLink(DeleteLinkRequest) returns (DeleteLinkResponse);
+  rpc UpdateLinkExpiry(UpdateLinkExpiryRequest) returns (google.protobuf.Empty);
+  rpc DeleteLink(DeleteLinkRequest) returns (google.protobuf.Empty);
 }

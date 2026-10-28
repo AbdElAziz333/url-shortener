@@ -17,8 +17,8 @@ func LoadFromEnv() (*config.AppConfig, error) {
 
 	cfg := &config.AppConfig{
 		Service: config.ServiceConfig{
-			Name:     requireEnv("SERVICE_NAME"),
-			Port:     requireEnv("SERVICE_PORT"),
+			Name:     requireEnv("APP_NAME"),
+			Port:     requireEnv("APP_PORT"),
 		},
 		Postgres: config.PostgresConfig{
 			Host:     requireEnv("POSTGRES_HOST"),

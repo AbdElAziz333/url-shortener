@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS link (
     user_id UUID NOT NULL,
     code TEXT NOT NULL UNIQUE,
     original_url TEXT NOT NULL,
-    expires_at DATE NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

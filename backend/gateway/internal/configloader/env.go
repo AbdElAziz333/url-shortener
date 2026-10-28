@@ -29,8 +29,8 @@ func LoadFromEnv() (*config.AppConfig, error) {
 
 	return &config.AppConfig{
 		Service: config.ServiceConfig{
-			Name: os.Getenv("SERVICE_NAME"),
-			Port: os.Getenv("SERVICE_PORT"),
+			Name: os.Getenv("APP_NAME"),
+			Port: os.Getenv("APP_PORT"),
 			ShortenerServiceURL: os.Getenv("SHORTENER_SERVICE_URL"),
 		},
 		Postgres: config.PostgresConfig{
@@ -41,7 +41,6 @@ func LoadFromEnv() (*config.AppConfig, error) {
 		},
 		Redis: config.RedisConfig{
 			Addr: os.Getenv("REDIS_ADDR"),
-			Username: os.Getenv("REDIS_USER"),
 			Password: os.Getenv("REDIS_PASSWORD"),
 		},
 		JWT: config.JWTConfig{

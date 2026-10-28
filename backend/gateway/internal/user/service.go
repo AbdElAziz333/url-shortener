@@ -24,6 +24,7 @@ type Service interface {
 	Signup(ctx context.Context, r *SignupRequest) (error)
 	Login(ctx context.Context, r *LoginRequest) (*security.TokenPair, error)
 	Refresh(ctx context.Context) (*security.TokenPair, error)
+	Me(ctx context.Context, id uuid.UUID) (*sqlcgen.FindByIDRow, error)
 }
 
 type service struct {
@@ -94,4 +95,17 @@ func (s *service) Login(ctx context.Context, r *LoginRequest) (*security.TokenPa
 // TODO: validate refresh token, issue a new token pair, store in redis.
 func (s *service) Refresh(ctx context.Context) (*security.TokenPair, error) {
 	return nil, ErrNotImplemented
+}
+
+func (s *service) Me(ctx context.Context, id uuid.UUID) (*sqlcgen.FindByIDRow, error)  {
+	user, err := s.querier.FindByID(ctx, id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrInvalidCredentials
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &user, nil
 }

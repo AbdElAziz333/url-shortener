@@ -16,8 +16,8 @@ func LoadFromEnv() (*config.AppConfig, error) {
 
 	return &config.AppConfig{
 		Service: config.ServiceConfig{
-			Name:     os.Getenv("SERVICE_NAME"),
-			Port:     os.Getenv("SERVICE_PORT"),
+			Name:     os.Getenv("APP_NAME"),
+			Port:     os.Getenv("APP_PORT"),
 			GRPCPort: os.Getenv("GRPC_PORT"),
 		},
 		Postgres: config.PostgresConfig{

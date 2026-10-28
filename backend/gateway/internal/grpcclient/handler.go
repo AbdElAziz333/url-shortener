@@ -2,10 +2,11 @@ package grpcclient
 
 import (
 	"net/http"
+	"strconv"
 	"time"
 
 	"aziz.dev/gateway/internal/middleware"
-	shortenerpb "aziz.dev/gateway/internal/pb/shortener"
+	linkpb "aziz.dev/gateway/internal/pb/link"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
@@ -32,20 +33,25 @@ func NewHandler(clients *Clients) *Handler {
 	return &Handler{clients: clients}
 }
 
-func (h *Handler) GetAllLinks(c *gin.Context) {
-	resp, err := h.clients.Shortener.GetAllLinks(c.Request.Context(), &shortenerpb.GetAllLinksRequest{
-		UserId: currentUserID(c),
-	})
-	if err != nil {
-		writeGRPCError(c, err)
-		return
-	}
+func (h *Handler) ListLinks(c *gin.Context) {
+    limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+    offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
 
-	c.JSON(http.StatusOK, gin.H{"data": linksToJSON(resp.GetLinks())})
+    resp, err := h.clients.Link.ListLinks(c.Request.Context(), &linkpb.ListLinksRequest{
+        UserId: currentUserID(c),
+        Limit:  int32(limit),
+        Offset: int32(offset),
+    })
+    if err != nil {
+        writeGRPCError(c, err)
+        return
+    }
+
+    c.JSON(http.StatusOK, gin.H{"data": linksToJSON(resp.GetLinks())})
 }
 
-func (h *Handler) GetLinkByCode(c *gin.Context) {
-	resp, err := h.clients.Shortener.GetLinkByCode(c.Request.Context(), &shortenerpb.GetLinkByCodeRequest{
+func (h *Handler) GetLink(c *gin.Context) {
+	resp, err := h.clients.Link.GetLink(c.Request.Context(), &linkpb.GetLinkRequest{
 		UserId: currentUserID(c),
 		Code: c.Param("code"),
 	})
@@ -67,7 +73,7 @@ func (h *Handler) CreateLink(c *gin.Context) {
 		return
 	}
 
-	req := &shortenerpb.CreateLinkRequest{
+	req := &linkpb.CreateLinkRequest{
 		UserId:      currentUserID(c),
 		OriginalUrl: body.OriginalURL,
 	}
@@ -75,7 +81,7 @@ func (h *Handler) CreateLink(c *gin.Context) {
 		req.ExpiresAt = timestamppb.New(*body.ExpiresAt)
 	}
 
-	resp, err := h.clients.Shortener.CreateLink(c.Request.Context(), req)
+	resp, err := h.clients.Link.CreateLink(c.Request.Context(), req)
 	if err != nil {
 		writeGRPCError(c, err)
 		return
@@ -93,7 +99,7 @@ func (h *Handler) UpdateExpiry(c *gin.Context) {
 		return
 	}
 
-	_, err := h.clients.Shortener.UpdateExpiry(c.Request.Context(), &shortenerpb.UpdateExpiryRequest{
+	_, err := h.clients.Link.UpdateLinkExpiry(c.Request.Context(), &linkpb.UpdateLinkExpiryRequest{
 		UserId:    currentUserID(c),
 		Code:      c.Param("code"),
 		ExpiresAt: timestamppb.New(body.ExpiresAt),
@@ -107,7 +113,7 @@ func (h *Handler) UpdateExpiry(c *gin.Context) {
 }
 
 func (h *Handler) DeleteLink(c *gin.Context) {
-	_, err := h.clients.Shortener.DeleteLink(c.Request.Context(), &shortenerpb.DeleteLinkRequest{
+	_, err := h.clients.Link.DeleteLink(c.Request.Context(), &linkpb.DeleteLinkRequest{
 		UserId: currentUserID(c),
 		Code:   c.Param("code"),
 	})
@@ -144,7 +150,7 @@ func writeGRPCError(c *gin.Context, err error) {
 	c.JSON(httpStatus, gin.H{"error": msg})
 }
 
-func linksToJSON(links []*shortenerpb.Link) []gin.H {
+func linksToJSON(links []*linkpb.Link) []gin.H {
 	out := make([]gin.H, 0, len(links))
 	for _, link := range links {
 		out = append(out, linkToJSON(link))
@@ -152,7 +158,7 @@ func linksToJSON(links []*shortenerpb.Link) []gin.H {
 	return out
 }
 
-func linkToJSON(link *shortenerpb.Link) gin.H {
+func linkToJSON(link *linkpb.Link) gin.H {
 	if link == nil {
 		return gin.H{}
 	}

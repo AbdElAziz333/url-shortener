@@ -13,7 +13,6 @@ func NewClient(ctx context.Context, cfg *config.RedisConfig) (*redis.Client, err
 	logrus.WithField("addr", cfg.Addr).Info("Initializing Redis client")
 	client := redis.NewClient(&redis.Options{
 		Addr: cfg.Addr,
-		Username: cfg.Username,
 		Password: cfg.Password,
 	})
 	

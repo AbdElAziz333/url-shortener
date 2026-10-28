@@ -3,22 +3,23 @@ package server
 import (
 	"net/http"
 
-	"aziz.dev/shortener/internal/link"
 	"github.com/gin-gonic/gin"
 )
 
-func NewRouter(linkHandler *link.Handler) *gin.Engine {
+func NewRouter() *gin.Engine {
+// func NewRouter(linkHandler *link.Handler) *gin.Engine {
 	router := gin.New()
 	router.Use(
 		gin.Recovery(),
 		gin.Logger(),
 	)
 
-	shortenerGroup := router.Group("/shortener")
-	shortenerGroup.GET("/health", healthHandler)
+	router.GET("/shortener/health", healthHandler)
+	// shortenerGroup := router.Group("/shortener")
+	// shortenerGroup.GET("/health", healthHandler)
 
-	linkGroup := shortenerGroup.Group("/api")
-	linkHandler.RegisterRoutes(linkGroup)
+	// linkGroup := shortenerGroup.Group("/api")
+	// linkHandler.RegisterRoutes(linkGroup)
 
 	return router
 }

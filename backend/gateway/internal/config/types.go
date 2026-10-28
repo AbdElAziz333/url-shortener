@@ -24,7 +24,6 @@ type PostgresConfig struct {
 
 type RedisConfig struct {
 	Addr string
-	Username string
 	Password string
 }
 

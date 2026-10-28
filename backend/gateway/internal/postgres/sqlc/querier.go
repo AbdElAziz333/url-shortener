@@ -6,11 +6,14 @@ package sqlcgen
 
 import (
 	"context"
+
+	"github.com/google/uuid"
 )
 
 type Querier interface {
 	CreateUser(ctx context.Context, arg CreateUserParams) error
 	FindByEmail(ctx context.Context, email string) (User, error)
+	FindByID(ctx context.Context, id uuid.UUID) (FindByIDRow, error)
 }
 
 var _ Querier = (*Queries)(nil)

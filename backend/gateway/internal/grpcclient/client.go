@@ -4,13 +4,13 @@ import (
 	"errors"
 	"fmt"
 
-	shortenerpb "aziz.dev/gateway/internal/pb/shortener"
+	linkpb "aziz.dev/gateway/internal/pb/link"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
 type Clients struct {
-	Shortener shortenerpb.ShortenerServiceClient
+	Link linkpb.LinkServiceClient
 	conns     []*grpc.ClientConn
 }
 
@@ -21,7 +21,7 @@ func NewClients(shortenerAddr string) (*Clients, error) {
 	}
 
 	return &Clients{
-		Shortener: shortenerpb.NewShortenerServiceClient(shortenerConn),
+		Link: linkpb.NewLinkServiceClient(shortenerConn),
 		conns:     []*grpc.ClientConn{shortenerConn},
 	}, nil
 }

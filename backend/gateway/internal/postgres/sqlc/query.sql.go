@@ -54,3 +54,28 @@ func (q *Queries) FindByEmail(ctx context.Context, email string) (User, error) {
 	)
 	return i, err
 }
+
+const findByID = `-- name: FindByID :one
+SELECT id, email, is_active, created_at, updated_at FROM users WHERE id = $1 LIMIT 1
+`
+
+type FindByIDRow struct {
+	ID        uuid.UUID
+	Email     string
+	IsActive  bool
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+func (q *Queries) FindByID(ctx context.Context, id uuid.UUID) (FindByIDRow, error) {
+	row := q.db.QueryRow(ctx, findByID, id)
+	var i FindByIDRow
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}

@@ -32,15 +32,14 @@ func main() {
 
 	linkQuerier := sqlcgen.New(postgresDB)
 	linkService := link.NewService(linkQuerier)
-	linkHandler := link.NewHandler(linkService)
-
-	router := server.NewRouter(linkHandler)
-
+	
 	go func() {
-		if err := server.StartGRPC(linkService, config.Service.GRPCPort); err != nil {
+		if err := link.StartGRPC(linkService, config.Service.GRPCPort); err != nil {
 			logrus.WithError(err).Fatal("Failed to start gRPC server")
 		}
 	}()
+
+	router := server.NewRouter()
 
 	logrus.Infof("Starting server on port %s", config.Service.Port)
 	if err := router.Run(":" + config.Service.Port); err != nil {

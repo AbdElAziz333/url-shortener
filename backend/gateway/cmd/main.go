@@ -6,7 +6,6 @@ import (
 
 	"aziz.dev/gateway/internal/configloader"
 	"aziz.dev/gateway/internal/grpcclient"
-	"aziz.dev/gateway/internal/middleware"
 	"aziz.dev/gateway/internal/postgres"
 	sqlcgen "aziz.dev/gateway/internal/postgres/sqlc"
 	"aziz.dev/gateway/internal/redis"
@@ -53,14 +52,7 @@ func main() {
 	defer grpcClients.Close()
 
 	grpcHandler := grpcclient.NewHandler(grpcClients)
-	router := server.NewRouter(userHandler)
-
-	links := router.Group("/shortener/api/links", middleware.AccessTokenMiddleware(&config.JWT))
-	links.GET("", grpcHandler.GetAllLinks)
-	links.GET("/:code", grpcHandler.GetLinkByCode)
-	links.POST("", grpcHandler.CreateLink)
-	links.PATCH("/:code/expiry", grpcHandler.UpdateExpiry)
-	links.DELETE("/:code", grpcHandler.DeleteLink)
+	router := server.NewRouter(userHandler, &config.JWT, grpcHandler)
 
 	logrus.Infof("gateway listening on port %s", config.Service.Port)
 	if err := router.Run(":" + config.Service.Port); err != nil {

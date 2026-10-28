@@ -4,7 +4,9 @@ import (
 	"errors"
 	"net/http"
 
+	"aziz.dev/gateway/internal/middleware"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 )
 
@@ -28,6 +30,40 @@ func (h *Handler) RegisterRoutes(r *gin.RouterGroup) {
 	authRoutes.POST("/login", h.Login)
 	authRoutes.POST("/refresh", h.Refresh)
 	authRoutes.POST("/logout", h.Logout)
+	authRoutes.GET("/me", h.Me)
+}
+
+func (h *Handler) Me(c *gin.Context) {
+    // 1. Get the user ID string set by the AccessTokenMiddleware
+    userIDVal, exists := c.Get(middleware.UserIDKey) // Make sure this key matches your middleware constant
+    if !exists {
+        c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+        return
+    }
+
+    userIDStr, ok := userIDVal.(string)
+    if !ok {
+        c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+        return
+    }
+
+    // 2. Parse the string into a uuid.UUID
+    id, err := uuid.Parse(userIDStr)
+    if err != nil {
+        c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user id format"})
+        return
+    }
+
+    // 3. Fetch user details from the service
+    user, err := h.service.Me(c.Request.Context(), id)
+    if err != nil {
+        respondError(c, err)
+        return
+    }
+
+    c.JSON(http.StatusOK, gin.H{
+        "data": user,
+    })
 }
 
 func (h *Handler) Signup(c *gin.Context) {
